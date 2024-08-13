@@ -1,1 +1,1 @@
-# ERiCA - Environmentally Robust Causal Abstraction Learning
+# Environmentally Robust Causal Abstractions - ERiCA
