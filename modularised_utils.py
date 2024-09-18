@@ -446,34 +446,62 @@ def lan_abduction(data, G, coeffs):
     
     return U, mean_U, cov_U
 
-def weighted_likelihood(params, X_parents, y, weights):
+def weighted_likelihood(params, X_parents, y, weights, beta=1.5, sigma=1.0):
     """
-    Custom weighted likelihood function for MLE with non-Gaussian noise.
+    Custom weighted likelihood function for MLE with Generalized Normal noise.
     
     Args:
     - params (ndarray): Coefficients for the linear model.
     - X_parents (ndarray): Parent data matrix.
     - y (ndarray): Target data.
     - weights (ndarray): Weights for each sample.
+    - beta (float): Shape parameter for the Generalized Normal distribution (controls tails).
+    - sigma (float): Scale parameter for the distribution (assumed fixed or can be estimated separately).
     
     Returns:
     - weighted_likelihood (float): Weighted negative log-likelihood (to be minimized).
     """
     predicted = np.dot(X_parents, params)  # Linear relationship
-    residuals = y - predicted               # Residuals (errors)
+    residuals = np.abs(y - predicted)      # Residuals (errors)
 
-    # Use L1 loss for robust estimation, weighted by the sample weights
-    return np.sum(weights * np.abs(residuals))  # Weighted L1 loss
+    # Generalized normal loss (L_beta loss)
+    loss = np.sum(weights * (residuals / sigma) ** beta)  # Weighted Generalized Normal loss
+    
+    return loss
 
-def get_mle_coefficients(data_list, G, weights=None):
+def weighted_likelihood(params, X_parents, y, weights, beta=1.5, sigma=1.0):
     """
-    Estimates the structural coefficients for the edges in the causal model using MLE and
-    multiple datasets (observational and/or interventional).
+    Custom weighted likelihood function for MLE with Generalized Normal noise.
+    
+    Args:
+    - params (ndarray): Coefficients for the linear model.
+    - X_parents (ndarray): Parent data matrix.
+    - y (ndarray): Target data.
+    - weights (ndarray): Weights for each sample.
+    - beta (float): Shape parameter for the Generalized Normal distribution (controls tails).
+    - sigma (float): Scale parameter for the distribution (assumed fixed or can be estimated separately).
+    
+    Returns:
+    - weighted_likelihood (float): Weighted negative log-likelihood (to be minimized).
+    """
+    predicted = np.dot(X_parents, params)  # Linear relationship
+    residuals = np.abs(y - predicted)      # Residuals (errors)
+
+    # Generalized normal loss (L_beta loss)
+    loss = np.sum(weights * (residuals / sigma) ** beta)  # Weighted Generalized Normal loss
+    
+    return loss
+
+def get_mle_coefficients(data_list, G, weights=None, beta=1.5, sigma=1.0):
+    """
+    Estimates the structural coefficients for the edges in the causal model using MLE with Generalized Normal noise.
     
     Args:
     - data_list (list of ndarray): List of n x k datasets where n is the number of samples and k is the number of variables.
     - G (DiGraph): The underlying DAG of the causal model.
     - weights (list of float): List of weights corresponding to each dataset (optional).
+    - beta (float): Shape parameter for the Generalized Normal distribution (default=1.5).
+    - sigma (float): Scale parameter for the distribution (optional, default=1.0).
     
     Returns:
     - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
@@ -481,29 +509,23 @@ def get_mle_coefficients(data_list, G, weights=None):
     nodes = list(G.nodes)
     coeffs = {}
 
-    # Check if only a single dataset is provided
     if isinstance(data_list, np.ndarray):
-        data_list = [data_list]  # Convert to a list for consistency
+        data_list = [data_list]
 
-    # Default weights to 1 if not provided
     if weights is None:
         weights = [1] * len(data_list)
 
-    # Initialize an empty list to hold concatenated datasets
     combined_data = []
     sample_weights = []
 
-    # Combine datasets and create sample weights
     for data, weight in zip(data_list, weights):
-        num_samples = data.shape[0]  # Number of samples in the dataset
-        combined_data.append(data)  # Append the current dataset
-        sample_weights.extend([weight] * num_samples)  # Extend weights list
+        num_samples = data.shape[0]
+        combined_data.append(data)
+        sample_weights.extend([weight] * num_samples)
 
-    # Concatenate all datasets into a single array
     combined_data = np.vstack(combined_data)
-    sample_weights = np.array(sample_weights)  # Convert to numpy array
+    sample_weights = np.array(sample_weights)
 
-    # Ensure that sample_weights matches the number of samples
     if sample_weights.shape[0] != combined_data.shape[0]:
         raise ValueError("Sample weights shape does not match combined data shape!")
 
@@ -513,19 +535,263 @@ def get_mle_coefficients(data_list, G, weights=None):
         
         if parents:
             parent_indices = [nodes.index(p) for p in parents]
-            X_parents = combined_data[:, parent_indices]  # Combined features
-            y = combined_data[:, node_idx]  # Combined target variable
+            X_parents = combined_data[:, parent_indices]
+            y = combined_data[:, node_idx]
             
-            # Use MLE to estimate coefficients
             init_params = np.zeros(len(parents))  # Initial guess for coefficients
             
-            # Optimize the negative likelihood (maximize likelihood by minimizing -logL)
-            result = minimize(weighted_likelihood, init_params, args=(X_parents, y, sample_weights), method='BFGS')
+            # Optimize the likelihood using Generalized Normal noise
+            result = minimize(weighted_likelihood, init_params, args=(X_parents, y, sample_weights, beta, sigma), method='Powell')
             
             for p, coef in zip(parents, result.x):
                     coeffs[(p, node)] = coef  # Store as (parent, child) pair
         
     return coeffs
+
+from scipy.optimize import minimize
+import numpy as np
+
+def weighted_huber_loss(params, X_parents, y, weights, delta=1.0):
+    """
+    Custom weighted likelihood function for MLE using Huber loss to handle noise uncertainty.
+    
+    Args:
+    - params (ndarray): Coefficients for the linear model.
+    - X_parents (ndarray): Parent data matrix.
+    - y (ndarray): Target data.
+    - weights (ndarray): Weights for each sample.
+    - delta (float): Huber loss parameter; defines the threshold between L1 and L2 losses.
+    
+    Returns:
+    - loss (float): Weighted Huber loss.
+    """
+    predicted = np.dot(X_parents, params)  # Linear relationship
+    residuals = y - predicted               # Residuals (errors)
+    
+    # Huber loss: Quadratic for small residuals, linear for large residuals
+    loss = np.where(np.abs(residuals) <= delta,
+                    0.5 * residuals**2,  # L2 for small residuals
+                    delta * (np.abs(residuals) - 0.5 * delta))  # L1 for large residuals
+    
+    return np.sum(weights * loss)  # Weighted Huber loss
+
+def get_mle_coefficients_huber(data_list, G, weights=None, delta=1.0):
+    """
+    Estimates the structural coefficients using MLE with Huber loss, robust to unknown noise.
+    
+    Args:
+    - data_list (list of ndarray): List of datasets.
+    - G (DiGraph): The underlying DAG of the causal model.
+    - weights (list of float): Weights corresponding to each dataset.
+    - delta (float): Huber loss parameter; defines the threshold between L1 and L2 losses.
+    
+    Returns:
+    - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
+    """
+    nodes = list(G.nodes)
+    coeffs = {}
+
+    # Ensure data is a list of datasets
+    if isinstance(data_list, np.ndarray):
+        data_list = [data_list]
+
+    # Default weights to 1 if not provided
+    if weights is None:
+        weights = [1] * len(data_list)
+
+    # Combine datasets and create sample weights
+    combined_data = []
+    sample_weights = []
+    for data, weight in zip(data_list, weights):
+        num_samples = data.shape[0]
+        combined_data.append(data)
+        sample_weights.extend([weight] * num_samples)
+
+    combined_data = np.vstack(combined_data)
+    sample_weights = np.array(sample_weights)
+
+    for node in nx.topological_sort(G):
+        node_idx = nodes.index(node)
+        parents = list(G.predecessors(node))
+        
+        if parents:
+            parent_indices = [nodes.index(p) for p in parents]
+            X_parents = combined_data[:, parent_indices]
+            y = combined_data[:, node_idx]
+            
+            init_params = np.zeros(len(parents))  # Initial guess for coefficients
+            
+            # Optimize using Huber loss
+            result = minimize(weighted_huber_loss, init_params, args=(X_parents, y, sample_weights, delta), method='Powell')
+            
+            for p, coef in zip(parents, result.x):
+                coeffs[(p, node)] = coef  # Store as (parent, child) pair
+
+    return coeffs
+
+from sklearn.mixture import GaussianMixture
+
+def weighted_gmm_likelihood(params, X_parents, y, weights, n_components=2):
+    """
+    Custom likelihood function using a Gaussian Mixture Model for the residuals.
+    
+    Args:
+    - params (ndarray): Coefficients for the linear model.
+    - X_parents (ndarray): Parent data matrix.
+    - y (ndarray): Target data.
+    - weights (ndarray): Weights for each sample.
+    - n_components (int): Number of components in the Gaussian Mixture Model.
+    
+    Returns:
+    - loss (float): Negative log-likelihood from GMM.
+    """
+    predicted = np.dot(X_parents, params)  # Linear relationship
+    residuals = y - predicted               # Residuals (errors)
+
+    # Fit a Gaussian Mixture Model to the residuals
+    gmm = GaussianMixture(n_components=n_components)
+    gmm.fit(residuals.reshape(-1, 1))  # Fit GMM on residuals
+    
+    # Get the log-likelihood of the residuals under the GMM
+    log_likelihood = gmm.score_samples(residuals.reshape(-1, 1))
+    
+    # We minimize the negative log-likelihood weighted by the sample weights
+    return -np.sum(weights * log_likelihood)
+
+def get_mle_coefficients_gmm(data_list, G, weights=None, n_components=2):
+    """
+    Estimates the structural coefficients using MLE with Gaussian Mixture Model for residuals.
+    
+    Args:
+    - data_list (list of ndarray): List of datasets.
+    - G (DiGraph): The underlying DAG of the causal model.
+    - weights (list of float): Weights corresponding to each dataset.
+    - n_components (int): Number of components in the Gaussian Mixture Model.
+    
+    Returns:
+    - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
+    """
+    nodes = list(G.nodes)
+    coeffs = {}
+
+    # Ensure data is a list of datasets
+    if isinstance(data_list, np.ndarray):
+        data_list = [data_list]
+
+    # Default weights to 1 if not provided
+    if weights is None:
+        weights = [1] * len(data_list)
+
+    # Combine datasets and create sample weights
+    combined_data = []
+    sample_weights = []
+    for data, weight in zip(data_list, weights):
+        num_samples = data.shape[0]
+        combined_data.append(data)
+        sample_weights.extend([weight] * num_samples)
+
+    combined_data = np.vstack(combined_data)
+    sample_weights = np.array(sample_weights)
+
+    for node in nx.topological_sort(G):
+        node_idx = nodes.index(node)
+        parents = list(G.predecessors(node))
+        
+        if parents:
+            parent_indices = [nodes.index(p) for p in parents]
+            X_parents = combined_data[:, parent_indices]
+            y = combined_data[:, node_idx]
+            
+            init_params = np.zeros(len(parents))  # Initial guess for coefficients
+            
+            # Optimize using Gaussian Mixture Model for residuals
+            result = minimize(weighted_gmm_likelihood, init_params, args=(X_parents, y, sample_weights, n_components), method='Powell')
+            
+            for p, coef in zip(parents, result.x):
+                coeffs[(p, node)] = coef  # Store as (parent, child) pair
+
+    return coeffs
+
+# def weighted_likelihood(params, X_parents, y, weights):
+#     """
+#     Custom weighted likelihood function for MLE with non-Gaussian noise.
+    
+#     Args:
+#     - params (ndarray): Coefficients for the linear model.
+#     - X_parents (ndarray): Parent data matrix.
+#     - y (ndarray): Target data.
+#     - weights (ndarray): Weights for each sample.
+    
+#     Returns:
+#     - weighted_likelihood (float): Weighted negative log-likelihood (to be minimized).
+#     """
+#     predicted = np.dot(X_parents, params)  # Linear relationship
+#     residuals = y - predicted               # Residuals (errors)
+
+#     # Use L1 loss for robust estimation, weighted by the sample weights
+#     return np.sum(weights * np.abs(residuals))  # Weighted L1 loss
+
+# def get_mle_coefficients(data_list, G, weights=None):
+#     """
+#     Estimates the structural coefficients for the edges in the causal model using MLE and
+#     multiple datasets (observational and/or interventional).
+    
+#     Args:
+#     - data_list (list of ndarray): List of n x k datasets where n is the number of samples and k is the number of variables.
+#     - G (DiGraph): The underlying DAG of the causal model.
+#     - weights (list of float): List of weights corresponding to each dataset (optional).
+    
+#     Returns:
+#     - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
+#     """
+#     nodes = list(G.nodes)
+#     coeffs = {}
+
+#     # Check if only a single dataset is provided
+#     if isinstance(data_list, np.ndarray):
+#         data_list = [data_list]  # Convert to a list for consistency
+
+#     # Default weights to 1 if not provided
+#     if weights is None:
+#         weights = [1] * len(data_list)
+
+#     # Initialize an empty list to hold concatenated datasets
+#     combined_data = []
+#     sample_weights = []
+
+#     # Combine datasets and create sample weights
+#     for data, weight in zip(data_list, weights):
+#         num_samples = data.shape[0]  # Number of samples in the dataset
+#         combined_data.append(data)  # Append the current dataset
+#         sample_weights.extend([weight] * num_samples)  # Extend weights list
+
+#     # Concatenate all datasets into a single array
+#     combined_data = np.vstack(combined_data)
+#     sample_weights = np.array(sample_weights)  # Convert to numpy array
+
+#     # Ensure that sample_weights matches the number of samples
+#     if sample_weights.shape[0] != combined_data.shape[0]:
+#         raise ValueError("Sample weights shape does not match combined data shape!")
+
+#     for node in nx.topological_sort(G):
+#         node_idx = nodes.index(node)
+#         parents = list(G.predecessors(node))
+        
+#         if parents:
+#             parent_indices = [nodes.index(p) for p in parents]
+#             X_parents = combined_data[:, parent_indices]  # Combined features
+#             y = combined_data[:, node_idx]  # Combined target variable
+            
+#             # Use MLE to estimate coefficients
+#             init_params = np.zeros(len(parents))  # Initial guess for coefficients
+            
+#             # Optimize the negative likelihood (maximize likelihood by minimizing -logL)
+#             result = minimize(weighted_likelihood, init_params, args=(X_parents, y, sample_weights), method='BFGS')
+            
+#             for p, coef in zip(parents, result.x):
+#                     coeffs[(p, node)] = coef  # Store as (parent, child) pair
+        
+#     return coeffs
 
 ######################## LOADERS ########################
 
