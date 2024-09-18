@@ -1,0 +1,25 @@
+import numpy as np
+
+experiments = {
+                1: 'synth1',
+                2: 'synth1_gnd',
+                2: 'little_lucas'
+              }
+
+n_envs      = {
+                'synth1': [3, 2],
+                'synth1_gnd': [3, 2],
+                'little_lucas': [2, 2]
+              }
+
+n_samples   = {
+                'synth1': [10000, 10000],
+                'synth1_gnd': [10000, 10000],
+                'little_lucas': [1000, 1000]
+              }
+
+radius      = {
+                'synth1': [0.5, 0.3],
+                'synth1_gnd': [0.5, 0.3],
+                'little_lucas': [0.8, 0.6]
+              }
