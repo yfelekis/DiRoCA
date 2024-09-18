@@ -1,29 +1,22 @@
 import numpy as np
-import itertools
-import joblib
+
+import networkx as nx
 import random
 import networkx as nx
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from collections import Counter
-from IPython.utils import io
-from pgmpy import inference
+import joblib
 
-import pickle 
-import os
-import seaborn as sns
+from scipy.stats import wishart
 from scipy.linalg import sqrtm
 from scipy.optimize import minimize
 
 from sklearn.mixture import GaussianMixture
 from sklearn.linear_model import LinearRegression
 
-from scipy.stats import wasserstein_distance
 from scipy.stats import norm
 import networkx as nx
 
-from scipy.special import rel_entr
+from scipy.stats import norm
 from scipy.spatial.distance import jensenshannon
 
 from src.CBN import CausalBayesianNetwork as CBN
