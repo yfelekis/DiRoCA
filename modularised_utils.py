@@ -1,4 +1,5 @@
 import numpy as np
+import ot
 
 import networkx as nx
 import random
@@ -18,6 +19,7 @@ import networkx as nx
 
 from scipy.stats import norm
 from scipy.spatial.distance import jensenshannon
+from scipy.stats import wasserstein_distance
 
 from src.CBN import CausalBayesianNetwork as CBN
 import operations as ops
@@ -204,6 +206,91 @@ def wasserstein_moments(mu1, cov1, mu2, cov2):
     
     return dist
 
+def mat_wasserstein_distance(matrix1, matrix2):
+    """
+    Computes the average Wasserstein distance between corresponding rows of two matrices.
+
+    Parameters:
+    - matrix1: np.ndarray of shape (n, m), first distribution matrix
+    - matrix2: np.ndarray of shape (n, m), second distribution matrix
+
+    Returns:
+    - avg_wasserstein_distance: float, average Wasserstein distance between the rows of the two matrices
+    """
+    # Ensure the matrices have the same shape
+    assert matrix1.shape == matrix2.shape, "Matrices must have the same shape"
+
+    # Compute the Wasserstein distance for each pair of corresponding rows
+    wasserstein_distances = []
+    for row1, row2 in zip(matrix1, matrix2):
+        distance = wasserstein_distance(row1, row2)
+        wasserstein_distances.append(distance)
+    
+    # Average the Wasserstein distances across all rows
+    avg_wasserstein_distance = np.mean(wasserstein_distances)
+    
+    return avg_wasserstein_distance
+
+
+def mat_ot_wasserstein_distance(matrix1, matrix2, metric='euclidean'):
+    """
+    Computes the Wasserstein distance between two matrices using optimal transport.
+
+    Parameters:
+    - matrix1: np.ndarray of shape (n, k), first dataset
+    - matrix2: np.ndarray of shape (m, k), second dataset
+    - metric: str, distance metric for computing ground cost (default: 'euclidean')
+
+    Returns:
+    - float, Wasserstein distance
+    """
+    # Number of samples
+    n, k1 = matrix1.shape
+    m, k2 = matrix2.shape
+    assert k1 == k2, "Both matrices must have the same number of features"
+
+    # Uniform weights for each point (assuming empirical distributions)
+    weights1 = np.ones(n) / n
+    weights2 = np.ones(m) / m
+
+    # Compute the cost matrix (ground metric between points)
+    cost_matrix = ot.dist(matrix1, matrix2, metric=metric)
+    
+    # Compute the Wasserstein distance
+    wasserstein_dist = ot.emd2(weights1, weights2, cost_matrix)
+    
+    return wasserstein_dist
+
+def mat_jsd_distance(matrix1, matrix2):
+    """
+    Computes the Jensen-Shannon Divergence (JSD) between two matrices.
+
+    Parameters:
+    - matrix1: np.ndarray of shape (n, m), first distribution matrix
+    - matrix2: np.ndarray of shape (n, m), second distribution matrix
+
+    Returns:
+    - jsd: float, Jensen-Shannon Divergence between the two matrices
+    """
+    # Normalize the matrices row-wise to represent probability distributions
+    matrix1_normalized = matrix1 / np.sum(matrix1, axis=1, keepdims=True)
+    matrix2_normalized = matrix2 / np.sum(matrix2, axis=1, keepdims=True)
+
+    # Compute the Jensen-Shannon Divergence for each row (distribution)
+    jsd_values = []
+    for row1, row2 in zip(matrix1_normalized, matrix2_normalized):
+        # Ensure no zero probabilities before calculating JSD
+        row1 = np.clip(row1, 1e-10, None)
+        row2 = np.clip(row2, 1e-10, None)
+        
+        jsd = jensenshannon(row1, row2)
+        jsd_values.append(jsd)
+    
+    # Average the JSD across all rows
+    jsd_mean = np.mean(jsd_values)
+    
+    return jsd_mean
+
 def sample_covariance(Sigma_hat, epsilon, method, scale):
     """
     Sample a new diagonal covariance matrix using specified method (uniform or Wishart).
@@ -308,6 +395,48 @@ def sample_stoch_matrix(n, m, axis=0):
         matrix = matrix / matrix.sum(axis=0, keepdims=True)
     
     return matrix
+
+def generate_perturbed_datasets(D, bound, num_envs=1, p=2):
+    """
+    Generates multiple perturbed datasets with perturbation constraint.
+    
+    Parameters:
+    - D: np.ndarray of shape (n, k), original dataset where n is the number of samples, k is the number of variables.
+    - bound: float, the constraint parameter.
+    - num: int, number of perturbed datasets to generate (default is 1).
+    - p: int, norm degree (default is 2 for Euclidean norm).
+    
+    Returns:
+    - D_perturbed_list: list of np.ndarray, each of shape (n, k), perturbed datasets.
+    - Theta_list: list of np.ndarray, each of shape (n, k), perturbation matrices.
+    """
+    n, k = D.shape
+    D_perturbed_list = []
+    Theta_list = []
+    
+    for _ in range(num_envs):
+        # Generate random perturbation matrix Theta
+        Theta = np.random.randn(n, k)
+
+        # Compute the norm of each row of Theta
+        norm_theta_p = np.linalg.norm(Theta, ord=p, axis=1)
+
+        # Calculate the current average of ||theta_i||^p
+        current_avg_norm_p = (1 / n) * np.sum(norm_theta_p ** p)
+        
+        # Scale Theta to satisfy the constraint
+        scaling_factor = (bound / current_avg_norm_p) ** (1 / p)
+        Theta *= scaling_factor
+
+        # Apply perturbation to the original dataset
+        D_perturbed = D + Theta
+        
+        # Store the perturbed dataset and Theta matrix
+        D_perturbed_list.append(D_perturbed)
+        Theta_list.append(Theta)
+    
+    return D_perturbed_list #, Theta_list
+
 
 # ######################## KEEP THIS! ########################
 # def get_coefficients(data, G):
