@@ -106,12 +106,13 @@ def create_dist_pairs(Ill_relevant, omega, distLLs, distHLs):
     return pairs
 
 
-def gelbrich_bound(mu_P, Sigma_P, mu_Q, Sigma_Q):
+def gelbrich_dist(mu_P, Sigma_P, mu_Q, Sigma_Q):
 
     mean_diff    = np.linalg.norm(mu_P - mu_Q)**2
     sqrt_Sigma_P = sqrtm(Sigma_P)
     trace        = np.trace(Sigma_P + Sigma_Q - 2 * sqrtm(sqrt_Sigma_P @ Sigma_Q @ sqrt_Sigma_P))
-    gb           = np.sqrt(mean_diff + trace)
+    # gb           = np.sqrt(mean_diff + trace)
+    gb           = mean_diff + trace
     
     return gb
 
@@ -677,8 +678,6 @@ def get_mle_coefficients(data_list, G, weights=None, beta=1.5, sigma=1.0):
         
     return coeffs
 
-from scipy.optimize import minimize
-import numpy as np
 
 def weighted_huber_loss(params, X_parents, y, weights, delta=1.0):
     """
@@ -758,7 +757,6 @@ def get_mle_coefficients_huber(data_list, G, weights=None, delta=1.0):
 
     return coeffs
 
-from sklearn.mixture import GaussianMixture
 
 def weighted_gmm_likelihood(params, X_parents, y, weights, n_components=2):
     """
