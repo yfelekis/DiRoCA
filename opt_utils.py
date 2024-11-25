@@ -1,6 +1,6 @@
 
 import numpy as np
-
+import torch
 import networkx as nx
 import numpy as np
 
@@ -116,3 +116,85 @@ def monge_map(m_alpha, Sigma_alpha, m_beta, Sigma_beta):
         return m_beta + A @ (x - m_alpha)
 
     return tau, A
+
+
+# Proximal operator of a matrix frobenious norm
+def prox_operator(A, lambda_param):
+    frobenius_norm = torch.norm(A, p='fro')
+    scaling_factor = torch.max(1 - lambda_param / frobenius_norm, torch.zeros_like(frobenius_norm))
+    return scaling_factor * A
+
+def diagonalize(A):
+    # Get eigenvalues and eigenvectors
+    eigvals, eigvecs = torch.linalg.eig(A)  
+    eigvals_real     = eigvals.real  
+    eigvals_real     = torch.sqrt(eigvals_real)  # Take the square root of the eigenvalues
+
+    return torch.diag(eigvals_real)
+
+def sqrtm_svd(A):
+    # Compute the SVD of A
+    U, S, V = torch.svd(A)
+    
+    # Take the square root of the singular values
+    S_sqrt = torch.sqrt(torch.clamp(S, min=0.0))  # Ensure non-negative singular values
+    
+    # Reconstruct the square root matrix
+    sqrt_A = U @ torch.diag(S_sqrt) @ V.T
+    
+    return sqrt_A
+
+def sqrtm_eig(A):
+    eigvals, eigvecs = torch.linalg.eig(A)
+    eigvals_real = eigvals.real
+    
+    # Ensure eigenvalues are non-negative for the square root to be valid
+    eigvals_sqrt = torch.sqrt(torch.clamp(eigvals_real, min=0.0))  # Square root of non-negative eigenvalues
+
+    # Reconstruct the square root of the matrix using the eigenvectors
+    # Make sure the eigenvectors are also real
+    eigvecs_real = eigvecs.real
+    
+    # Reconstruct the matrix square root
+    sqrt_A = eigvecs_real @ torch.diag(eigvals_sqrt) @ eigvecs_real.T
+    
+    return sqrt_A
+
+def check_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta):
+    """
+    Check if the given mu_L, Sigma_L, mu_H, Sigma_H satisfy the constraints and return the violation amount if any.
+
+    Arguments:
+    mu_L, Sigma_L, mu_H, Sigma_H: Input tensors for the model parameters.
+    hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H: Target tensors.
+    epsilon, delta: Constraint thresholds.
+
+    Returns:
+    bool: True if both constraints are satisfied, False otherwise.
+    violation_1, violation_2: Violation amounts for each constraint.
+    """
+    # 1st constraint: epsilon^2 - ||mu_L - hat_mu_L||^2_2 - ||Sigma_L^{1/2} - hat_Sigma_L^{1/2}||^2_2 >= 0
+    mu_L_term = torch.norm(mu_L - hat_mu_L) ** 2
+    Sigma_L_sqrt = torch.cholesky(Sigma_L)  # Assuming Sigma_L is positive-definite
+    hat_Sigma_L_sqrt = torch.cholesky(hat_Sigma_L)  # Assuming hat_Sigma_L is positive-definite
+    Sigma_L_term = torch.norm(Sigma_L_sqrt - hat_Sigma_L_sqrt) ** 2
+
+    # First constraint check and violation amount
+    constraint_1 = epsilon ** 2 - mu_L_term - Sigma_L_term
+    violation_1 = max(0, -constraint_1.item())  # If violated, return how much negative it is (violation)
+
+    # 2nd constraint: delta^2 - ||mu_H - hat_mu_H||^2_2 - ||Sigma_H^{1/2} - hat_Sigma_H^{1/2}||^2_2 >= 0
+    mu_H_term = torch.norm(mu_H - hat_mu_H) ** 2
+    Sigma_H_sqrt = torch.cholesky(Sigma_H)  # Assuming Sigma_H is positive-definite
+    hat_Sigma_H_sqrt = torch.cholesky(hat_Sigma_H)  # Assuming hat_Sigma_H is positive-definite
+    Sigma_H_term = torch.norm(Sigma_H_sqrt - hat_Sigma_H_sqrt) ** 2
+
+    # Second constraint check and violation amount
+    constraint_2 = delta ** 2 - mu_H_term - Sigma_H_term
+    violation_2 = max(0, -constraint_2.item())  # If violated, return how much negative it is (violation)
+
+    # Return True if both constraints are satisfied, False otherwise, along with violations
+    if violation_1 == 0 and violation_2 == 0:
+        return True, violation_1, violation_2
+    else:
+        return False, violation_1, violation_2
