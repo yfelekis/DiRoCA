@@ -175,8 +175,8 @@ def check_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_m
     """
     # 1st constraint: epsilon^2 - ||mu_L - hat_mu_L||^2_2 - ||Sigma_L^{1/2} - hat_Sigma_L^{1/2}||^2_2 >= 0
     mu_L_term = torch.norm(mu_L - hat_mu_L) ** 2
-    Sigma_L_sqrt = torch.cholesky(Sigma_L)  # Assuming Sigma_L is positive-definite
-    hat_Sigma_L_sqrt = torch.cholesky(hat_Sigma_L)  # Assuming hat_Sigma_L is positive-definite
+    Sigma_L_sqrt = sqrtm_svd(Sigma_L)  # Assuming Sigma_L is positive-definite
+    hat_Sigma_L_sqrt = sqrtm_svd(hat_Sigma_L)  # Assuming hat_Sigma_L is positive-definite
     Sigma_L_term = torch.norm(Sigma_L_sqrt - hat_Sigma_L_sqrt) ** 2
 
     # First constraint check and violation amount
@@ -185,8 +185,8 @@ def check_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_m
 
     # 2nd constraint: delta^2 - ||mu_H - hat_mu_H||^2_2 - ||Sigma_H^{1/2} - hat_Sigma_H^{1/2}||^2_2 >= 0
     mu_H_term = torch.norm(mu_H - hat_mu_H) ** 2
-    Sigma_H_sqrt = torch.cholesky(Sigma_H)  # Assuming Sigma_H is positive-definite
-    hat_Sigma_H_sqrt = torch.cholesky(hat_Sigma_H)  # Assuming hat_Sigma_H is positive-definite
+    Sigma_H_sqrt = sqrtm_svd(Sigma_H)  # Assuming Sigma_H is positive-definite
+    hat_Sigma_H_sqrt = sqrtm_svd(hat_Sigma_H)  # Assuming hat_Sigma_H is positive-definite
     Sigma_H_term = torch.norm(Sigma_H_sqrt - hat_Sigma_H_sqrt) ** 2
 
     # Second constraint check and violation amount
@@ -198,3 +198,30 @@ def check_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_m
         return True, violation_1, violation_2
     else:
         return False, violation_1, violation_2
+
+def check_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta):
+    # Constraint 1: epsilon^2 - ||mu_L - hat_mu_L||_2^2 - ||Sigma_L^{1/2} - hat_Sigma_L^{1/2}||_2^2 >= 0
+    constraint_L = epsilon**2 - (torch.norm(mu_L - hat_mu_L)**2) - (torch.norm(sqrtm_svd(Sigma_L) - sqrtm_svd(hat_Sigma_L))**2)
+    
+    # Constraint 2: delta^2 - ||mu_H - hat_mu_H||_2^2 - ||Sigma_H^{1/2} - hat_Sigma_H^{1/2}||_2^2 >= 0
+    constraint_H = delta**2 - (torch.norm(mu_H - hat_mu_H)**2) - (torch.norm(sqrtm_svd(Sigma_H) - sqrtm_svd(hat_Sigma_H))**2)
+    
+    # Return whether constraints are satisfied (i.e., >= 0) and the constraint violations
+    return constraint_L, constraint_H
+
+
+def enforce_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta):
+    constraint_L, constraint_H = check_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta)
+    
+    # Clip values if constraints are violated
+    if constraint_L < 0:
+        #print(f"Constraint for mu_L and Sigma_L violated. Fixing...")
+        mu_L = hat_mu_L + torch.clamp(mu_L - hat_mu_L, min=-epsilon, max=epsilon)
+        Sigma_L = hat_Sigma_L + torch.clamp(Sigma_L - hat_Sigma_L, min=-epsilon, max=epsilon)
+    
+    if constraint_H < 0:
+        #print(f"Constraint for mu_H and Sigma_H violated. Fixing...")
+        mu_H = hat_mu_H + torch.clamp(mu_H - hat_mu_H, min=-delta, max=delta)
+        Sigma_H = hat_Sigma_H + torch.clamp(Sigma_H - hat_Sigma_H, min=-delta, max=delta)
+    
+    return mu_L, Sigma_L, mu_H, Sigma_H
