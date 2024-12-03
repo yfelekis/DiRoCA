@@ -921,12 +921,11 @@ def get_mle_coefficients_gmm(data_list, G, weights=None, n_components=2):
 #     return coeffs
 
 ######################## LOADERS ########################
-
-def load_ll_model(experiment):
-    return joblib.load(f'data/{experiment}/LL.pkl')
-
-def load_hl_model(experiment):
-    return joblib.load(f'data/{experiment}/HL.pkl')
+def load_model(experiment, model):
+    if model == 'LL':
+        return joblib.load(f'data/{experiment}/LL.pkl')
+    elif model == 'HL':
+        return joblib.load(f'data/{experiment}/HL.pkl')
 
 def load_omega_map(experiment):
     return joblib.load(f'data/{experiment}/omega.pkl')
@@ -936,6 +935,12 @@ def load_pairs(experiment):
 
 def load_samples(experiment):
     return joblib.load(f'data/{experiment}/Ds.pkl')
+
+def load_exogenous(experiment, model):
+    if model == 'LL':
+        return joblib.load(f'data/{experiment}/exogenous_LL.pkl')
+    elif model == 'HL':
+        return joblib.load(f'data/{experiment}/exogenous_HL.pkl')
 # def gauss_lan_abduction(mu_X, Sigma_X, A):
     
 #     mu_X     = np.asarray(mu_X)
