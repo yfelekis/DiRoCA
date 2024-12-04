@@ -572,8 +572,12 @@ def lan_abduction(data, G, coeffs):
 
     # Estimate the mean and covariance of the exogenous variables
     mean_U = np.mean(U, axis=0)
-    cov_U  = np.cov(U, rowvar=False)
-    
+    #cov_U  = np.cov(U, rowvar=False)
+    # Enforce diagonal positive definite covariance matrix
+    cov_U_diag = np.var(U, axis=0)  # Variance of each exogenous variable
+    cov_U_diag = np.clip(cov_U_diag, a_min=1e-6, a_max=None)  # Ensure no negative or near-zero variances
+    cov_U = np.diag(cov_U_diag)  # Construct diagonal covariance matrix
+
     return U, mean_U, cov_U
 
 def weighted_likelihood(params, X_parents, y, weights, beta=1.5, sigma=1.0):

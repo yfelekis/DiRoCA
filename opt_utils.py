@@ -90,15 +90,33 @@ def sqrtm_svd(A):
         # Return regularized identity matrix as fallback
         return torch.eye(A.shape[0], device=A.device) * torch.norm(A)
 
+def are_matrices_equal(matrix1, matrix2, tol=1e-11):
+    """
+    Check if two matrices are equal within a given tolerance.
+    
+    Args:
+        matrix1 (np.ndarray): The first matrix to compare.
+        matrix2 (np.ndarray): The second matrix to compare.
+        tol (float): Tolerance for element-wise comparison (default: 1e-8).
+    
+    Returns:
+        bool: True if the matrices are equal within the given tolerance, False otherwise.
+    """
+    if matrix1.shape != matrix2.shape:
+        return False  # Matrices must have the same shape to be equal
+
+    return torch.allclose(matrix1, matrix2, atol=tol)
+
 def regmat(matrix, eps=1e-10):
     # Replace NaN and Inf values with finite numbers
-    matrix = torch.nan_to_num(matrix, nan=0.0, posinf=1e10, neginf=-1e10)
-    
+    matrix_new = torch.nan_to_num(matrix, nan=0.0, posinf=1e10, neginf=-1e10)
+    if not are_matrices_equal(matrix, matrix_new):
+        print('O')
     # Add a small epsilon to the diagonal for numerical stability
-    if matrix.dim() == 2 and matrix.size(0) == matrix.size(1):
-        matrix = matrix + eps * torch.eye(matrix.size(0), device=matrix.device)
+    if matrix_new.dim() == 2 and matrix_new.size(0) == matrix_new.size(1):
+        matrix_new = matrix_new + eps * torch.eye(matrix_new.size(0), device=matrix_new.device)
     
-    return matrix
+    return matrix_new
 
 def sqrtm_eig(A):
     eigvals, eigvecs = torch.linalg.eig(A)
@@ -530,7 +548,7 @@ def project_onto_gelbrich_ball(mu, Sigma, hat_mu, hat_Sigma, epsilon, max_iter=1
     
     return mu, Sigma
 
-def verify_gelbrich_constraint(mu, Sigma, hat_mu, hat_Sigma, epsilon):
+def verify_gelbrich_constraint(mu, Sigma, hat_mu, hat_Sigma, radius):
     """
     Verify constraint
     """
@@ -546,6 +564,6 @@ def verify_gelbrich_constraint(mu, Sigma, hat_mu, hat_Sigma, epsilon):
     # print(f"Total G_squared: {G_squared.item()}, epsilon^2: {epsilon**2}")
 
     G_squared       = round(G_squared.item(), 5)
-    epsilon_squared = round(epsilon**2, 5)
+    radius_squared = round(radius**2, 5)
     
-    return G_squared <= epsilon_squared, G_squared, epsilon_squared
+    return G_squared <= radius_squared, G_squared, radius_squared
