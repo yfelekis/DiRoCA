@@ -5,6 +5,8 @@ import networkx as nx
 import numpy as np
 import networkx as nx
 from tqdm import tqdm
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from src.CBN import CausalBayesianNetwork as CBN
 import operations as ops
@@ -90,6 +92,7 @@ def sqrtm_svd(A):
         # Return regularized identity matrix as fallback
         return torch.eye(A.shape[0], device=A.device) * torch.norm(A)
 
+
 def are_matrices_equal(matrix1, matrix2, tol=1e-11):
     """
     Check if two matrices are equal within a given tolerance.
@@ -110,8 +113,8 @@ def are_matrices_equal(matrix1, matrix2, tol=1e-11):
 def regmat(matrix, eps=1e-10):
     # Replace NaN and Inf values with finite numbers
     matrix_new = torch.nan_to_num(matrix, nan=0.0, posinf=1e10, neginf=-1e10)
-    if not are_matrices_equal(matrix, matrix_new):
-        print('O')
+    # if not are_matrices_equal(matrix, matrix_new):
+    #     print('O')
     # Add a small epsilon to the diagonal for numerical stability
     if matrix_new.dim() == 2 and matrix_new.size(0) == matrix_new.size(1):
         matrix_new = matrix_new + eps * torch.eye(matrix_new.size(0), device=matrix_new.device)
@@ -133,6 +136,200 @@ def sqrtm_eig(A):
     sqrt_A = eigvecs_real @ torch.diag(eigvals_sqrt) @ eigvecs_real.T
     
     return sqrt_A
+
+
+def plot_epoch_progress(epoch, epoch_min_objectives, epoch_max_objectives, robust):
+    """Plot optimization progress for current epoch"""
+    if robust:
+        # Create subplot with both min and max
+        fig = make_subplots(rows=1, cols=2, 
+                           subplot_titles=(f'Minimization Steps (Epoch {epoch+1})', 
+                                         f'Maximization Steps (Epoch {epoch+1})'))
+        
+        # Add min step objectives
+        fig.add_trace(
+            go.Scatter(y=epoch_min_objectives, 
+                      mode='lines', 
+                      name='Min steps',
+                      line=dict(color='green')),
+            row=1, col=1
+        )
+
+        # Add max step objectives
+        fig.add_trace(
+            go.Scatter(y=epoch_max_objectives, 
+                      mode='lines', 
+                      name='Max steps',
+                      line=dict(color='purple')),
+            row=1, col=2
+        )
+        
+        # Update both axes
+        for row, col in [(1,1), (1,2)]:
+            fig.update_xaxes(
+                title_text="Step", 
+                row=row, col=col,
+                showgrid=True,
+                gridcolor='lightgray',
+                showline=True,
+                linewidth=1,
+                linecolor='black'
+            )
+        
+        fig.update_yaxes(
+            title_text="Objective T Value", 
+            row=1, col=1,
+            showgrid=True,
+            gridcolor='lightgray',
+            showline=True,
+            linewidth=1,
+            linecolor='black'
+        )
+        fig.update_yaxes(
+            title_text="Objective θ Value", 
+            row=1, col=2,
+            showgrid=True,
+            gridcolor='lightgray',
+            showline=True,
+            linewidth=1,
+            linecolor='black'
+        )
+        
+    else:
+        # Create single plot for minimization only
+        fig = go.Figure()
+        
+        # Add min step objectives
+        fig.add_trace(
+            go.Scatter(y=epoch_min_objectives, 
+                      mode='lines', 
+                      name='Min steps',
+                      line=dict(color='green'))
+        )
+        
+        # Update axes for single plot
+        fig.update_xaxes(
+            title_text="Step",
+            showgrid=True,
+            gridcolor='lightgray',
+            showline=True,
+            linewidth=1,
+            linecolor='black'
+        )
+        fig.update_yaxes(
+            title_text="Objective T Value",
+            showgrid=True,
+            gridcolor='lightgray',
+            showline=True,
+            linewidth=1,
+            linecolor='black'
+        )
+
+    # Common layout updates
+    fig.update_layout(
+        height=400,
+        width=1000 if robust else 500,
+        showlegend=True,
+        title_text=f"Optimization Progress - Epoch {epoch+1}",
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(size=12)
+    )
+
+    fig.show()
+
+def plot_overall_progress(epoch_objectives, robust):
+    """Plot overall optimization progress"""
+    if robust:
+        # Create subplot with both objectives
+        fig = make_subplots(rows=2, cols=1,
+                           subplot_titles=('T Objective across Epochs', 
+                                         'θ Objective across Epochs'))
+        
+        # Plot T objectives
+        fig.add_trace(
+            go.Scatter(y=epoch_objectives['T_objectives'], 
+                      mode='lines', 
+                      name='T objective',
+                      line=dict(color='green')),
+            row=1, col=1
+        )
+        
+        # Plot theta objectives
+        fig.add_trace(
+            go.Scatter(y=epoch_objectives['theta_objectives'], 
+                      mode='lines', 
+                      name='θ objective',
+                      line=dict(color='purple')),
+            row=2, col=1
+        )
+        
+        # Update both sets of axes
+        for row in [1, 2]:
+            fig.update_xaxes(
+                title_text="Epoch", 
+                row=row, col=1,
+                showgrid=True,
+                gridcolor='lightgray',
+                showline=True,
+                linewidth=1,
+                linecolor='black'
+            )
+            
+            title = "T Objective Value" if row == 1 else "θ Objective Value"
+            fig.update_yaxes(
+                title_text=title, 
+                row=row, col=1,
+                showgrid=True,
+                gridcolor='lightgray',
+                showline=True,
+                linewidth=1,
+                linecolor='black'
+            )
+            
+    else:
+        # Create single plot for T objective only
+        fig = go.Figure()
+        
+        # Plot T objectives
+        fig.add_trace(
+            go.Scatter(y=epoch_objectives['T_objectives'], 
+                      mode='lines', 
+                      name='T objective',
+                      line=dict(color='green'))
+        )
+        
+        # Update axes for single plot
+        fig.update_xaxes(
+            title_text="Epoch",
+            showgrid=True,
+            gridcolor='lightgray',
+            showline=True,
+            linewidth=1,
+            linecolor='black'
+        )
+        fig.update_yaxes(
+            title_text="T Objective Value",
+            showgrid=True,
+            gridcolor='lightgray',
+            showline=True,
+            linewidth=1,
+            linecolor='black'
+        )
+
+    # Common layout updates
+    fig.update_layout(
+        height=800 if robust else 400,
+        width=1000 if robust else 500,
+        showlegend=True,
+        title_text="Overall Optimization Progress",
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(size=12)
+    )
+
+    fig.show()
+
 
 def check_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta):
     """
@@ -567,3 +764,22 @@ def verify_gelbrich_constraint(mu, Sigma, hat_mu, hat_Sigma, radius):
     radius_squared = round(radius**2, 5)
     
     return G_squared <= radius_squared, G_squared, radius_squared
+
+
+def condition_number(matrix):
+    """
+    Computes the condition number of a matrix using the 2-norm.
+
+    Parameters:
+        matrix (np.ndarray): Input matrix (can be square or rectangular).
+
+    Returns:
+        float: The condition number of the matrix.
+    """
+    # Compute the singular values of the matrix
+    singular_values = np.linalg.svd(matrix, compute_uv=False)
+
+    # Condition number is the ratio of the largest to smallest singular value
+    cond_number = singular_values.max() / singular_values.min()
+
+    return cond_number

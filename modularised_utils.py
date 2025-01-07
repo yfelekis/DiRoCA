@@ -472,65 +472,139 @@ def generate_perturbed_datasets(D, bound, num_envs=1, p=2):
 #     return coeffs
 # ######################## KEEP THIS! ########################
 
+from sklearn.linear_model import LinearRegression, Ridge
+import networkx as nx
+import numpy as np
 
-def get_coefficients(data_list, G, weights=None):
+def get_coefficients(data_list, G, weights=None, use_ridge=False, alpha=1.0):
     """
     Estimates the structural coefficients for the edges in the causal model
-    using both observational and interventional datasets.
+    using observational datasets, given the causal graph.
     
     Args:
-    - data_list (list of ndarray): List of n x k datasets where n is the number of samples and k is the number of variables.
+    - data_list (list of ndarray): List of n x k datasets (n samples, k variables).
     - G (DiGraph): The underlying DAG of the causal model.
-    - weights (list of float): List of weights corresponding to each dataset (optional).
+    - weights (list of float): List of weights for each dataset (optional).
+    - use_ridge (bool): Whether to use Ridge regression for better stability.
+    - alpha (float): Regularization strength for Ridge regression.
     
     Returns:
     - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
     """
+    # Ensure graph is a DAG
+    if not nx.is_directed_acyclic_graph(G):
+        raise ValueError("The provided graph is not a valid DAG!")
+
     nodes = list(G.nodes)
     coeffs = {}
 
-    # Check if only a single dataset is provided
+    # Convert a single dataset to a list for consistency
     if isinstance(data_list, np.ndarray):
-        data_list = [data_list]  # Convert to a list for consistency
+        data_list = [data_list]
 
     # Default weights to 1 if not provided
     if weights is None:
         weights = [1] * len(data_list)
 
-    # Initialize an empty list to hold concatenated datasets
+    # Combine datasets and weights
     combined_data = []
     sample_weights = []
 
-    # Combine datasets and create sample weights
     for data, weight in zip(data_list, weights):
-        num_samples = data.shape[0]  # Number of samples in the dataset
-        combined_data.append(data)  # Append the current dataset
-        sample_weights.extend([weight] * num_samples)  # Extend weights list
+        num_samples = data.shape[0]
+        combined_data.append(data)
+        sample_weights.extend([weight] * num_samples)
 
-    # Concatenate all datasets into a single array
+    # Stack all datasets into one array
     combined_data = np.vstack(combined_data)
-    sample_weights = np.array(sample_weights)  # Convert to numpy array
+    sample_weights = np.array(sample_weights)
 
-    # Ensure that sample_weights matches the number of samples
-    if sample_weights.shape[0] != combined_data.shape[0]:
-        raise ValueError("Sample weights shape does not match combined data shape!")
-
+    # Normalize sample weights
+    # Normalize sample weights
+    sample_weights = np.array(sample_weights, dtype=np.float64)  # Ensure float type
+    sample_weights /= np.sum(sample_weights)
+    # Estimate coefficients for each edge
     for node in nx.topological_sort(G):
         node_idx = nodes.index(node)
         parents = list(G.predecessors(node))
         
         if parents:
             parent_indices = [nodes.index(p) for p in parents]
-            X_parents = combined_data[:, parent_indices]  # Combined features
-            y = combined_data[:, node_idx]  # Combined target variable
+            X_parents = combined_data[:, parent_indices]  # Features (parents)
+            y = combined_data[:, node_idx]  # Target (child)
             
-            # Perform weighted linear regression
-            reg = LinearRegression().fit(X_parents, y, sample_weight=sample_weights)
+            # Choose regression model
+            if use_ridge:
+                reg = Ridge(alpha=alpha)
+            else:
+                reg = LinearRegression()
+            
+            # Fit the model with sample weights
+            reg.fit(X_parents, y, sample_weight=sample_weights)
             
             for p, coef in zip(parents, reg.coef_):
-                coeffs[(p, node)] = coef  # Store as (parent, child) pair
+                coeffs[(p, node)] = coef  # Store coefficient as (parent, child)
 
     return coeffs
+
+# def get_coefficients(data_list, G, weights=None):
+#     """
+#     Estimates the structural coefficients for the edges in the causal model
+#     using both observational and interventional datasets.
+    
+#     Args:
+#     - data_list (list of ndarray): List of n x k datasets where n is the number of samples and k is the number of variables.
+#     - G (DiGraph): The underlying DAG of the causal model.
+#     - weights (list of float): List of weights corresponding to each dataset (optional).
+    
+#     Returns:
+#     - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
+#     """
+#     nodes = list(G.nodes)
+#     coeffs = {}
+
+#     # Check if only a single dataset is provided
+#     if isinstance(data_list, np.ndarray):
+#         data_list = [data_list]  # Convert to a list for consistency
+
+#     # Default weights to 1 if not provided
+#     if weights is None:
+#         weights = [1] * len(data_list)
+
+#     # Initialize an empty list to hold concatenated datasets
+#     combined_data = []
+#     sample_weights = []
+
+#     # Combine datasets and create sample weights
+#     for data, weight in zip(data_list, weights):
+#         num_samples = data.shape[0]  # Number of samples in the dataset
+#         combined_data.append(data)  # Append the current dataset
+#         sample_weights.extend([weight] * num_samples)  # Extend weights list
+
+#     # Concatenate all datasets into a single array
+#     combined_data = np.vstack(combined_data)
+#     sample_weights = np.array(sample_weights)  # Convert to numpy array
+
+#     # Ensure that sample_weights matches the number of samples
+#     if sample_weights.shape[0] != combined_data.shape[0]:
+#         raise ValueError("Sample weights shape does not match combined data shape!")
+
+#     for node in nx.topological_sort(G):
+#         node_idx = nodes.index(node)
+#         parents = list(G.predecessors(node))
+        
+#         if parents:
+#             parent_indices = [nodes.index(p) for p in parents]
+#             X_parents = combined_data[:, parent_indices]  # Combined features
+#             y = combined_data[:, node_idx]  # Combined target variable
+            
+#             # Perform weighted linear regression
+#             reg = LinearRegression().fit(X_parents, y, sample_weight=sample_weights)
+            
+#             for p, coef in zip(parents, reg.coef_):
+#                 coeffs[(p, node)] = coef  # Store as (parent, child) pair
+
+#     return coeffs
 
 
 def lan_abduction(data, G, coeffs):
@@ -931,6 +1005,12 @@ def load_model(experiment, model):
     elif model == 'HL':
         return joblib.load(f'data/{experiment}/HL.pkl')
 
+def load_coeffs(experiment, model):
+    if model == 'LL':
+        return joblib.load(f'data/{experiment}/ll_coeffs.pkl')
+    elif model == 'HL':
+        return joblib.load(f'data/{experiment}/hl_coeffs.pkl')
+
 def load_omega_map(experiment):
     return joblib.load(f'data/{experiment}/omega.pkl')
 
@@ -945,6 +1025,9 @@ def load_exogenous(experiment, model):
         return joblib.load(f'data/{experiment}/exogenous_LL.pkl')
     elif model == 'HL':
         return joblib.load(f'data/{experiment}/exogenous_HL.pkl')
+    
+def load_T(experiment):
+    return joblib.load(f'data/{experiment}/Tau.pkl')
 # def gauss_lan_abduction(mu_X, Sigma_X, A):
     
 #     mu_X     = np.asarray(mu_X)

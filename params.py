@@ -13,9 +13,9 @@ n_envs      = {
               }
 
 n_samples   = {
-                'synth1': [10000, 10000],
-                'synth1_gnd': [10000, 10000],
-                'little_lucas': [1000, 1000]
+                'synth1': [100000, 100000],
+                'synth1_gnd': [100000, 100000],
+                'little_lucas': [1000000, 1000000]
               }
 
 radius      = {
