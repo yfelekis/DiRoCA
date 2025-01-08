@@ -330,6 +330,27 @@ def plot_overall_progress(epoch_objectives, robust):
 
     fig.show()
 
+def print_results(T, paramsL, paramsH, elapsed_time):
+    print("\n" + "="*50)
+    print("OPTIMIZATION RESULTS".center(50))
+    print("="*50 + "\n")
+
+    print("Final Transformation Matrix T:")
+    print("-"*30)
+    print(np.array2string(T, precision=4, suppress_small=True))
+    print(f"\nCondition Number: {condition_number(T):.4f}")
+    
+    print("\nLow-Level Parameters:")
+    print("-"*30)
+    print(f"μ_L = {np.array2string(paramsL['mu_U'], precision=4, suppress_small=True)}")
+    print(f"Σ_L = \n{np.array2string(paramsL['Sigma_U'], precision=4, suppress_small=True)}")
+    
+    print("\nHigh-Level Parameters:")
+    print("-"*30)
+    print(f"μ_H = {np.array2string(paramsH['mu_U'], precision=4, suppress_small=True)}")
+    print(f"Σ_H = \n{np.array2string(paramsH['Sigma_U'], precision=4, suppress_small=True)}")
+
+    print(f"\nOptimization time: {elapsed_time:.4f} seconds")
 
 def check_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta):
     """
