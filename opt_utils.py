@@ -65,7 +65,41 @@ def diagonalize(A):
 #     sqrt_A = U @ torch.diag(S_sqrt) @ V.T
     
 #     return sqrt_A
-
+def sqrtm_svd_np(A):
+    """
+    Compute the matrix square root using SVD for numpy arrays.
+    
+    Args:
+        A: numpy array of shape (n x n)
+        
+    Returns:
+        Matrix square root of A
+    """
+    # Handle non-finite values
+    A = np.nan_to_num(A, nan=1e-6, posinf=1e10, neginf=-1e10)
+    
+    # Ensure matrix is symmetric
+    A = 0.5 * (A + A.T)
+    
+    # Add small regularization term
+    eps = 1e-10
+    A = A + eps * np.eye(A.shape[0])
+    
+    try:
+        # Try SVD computation
+        U, S, V = np.linalg.svd(A)
+        
+        # Ensure numerical stability of singular values
+        S = np.clip(S, eps, None)
+        S_sqrt = np.sqrt(S)
+        
+        return U @ np.diag(S_sqrt) @ V
+        
+    except Exception as e:
+        print(f"SVD failed: {e}")
+        # Return regularized identity matrix as fallback
+        return np.eye(A.shape[0]) * np.linalg.norm(A)
+    
 def sqrtm_svd(A):
     # Handle non-finite values
     A = torch.nan_to_num(A, nan=1e-6, posinf=1e10, neginf=-1e10)
@@ -419,317 +453,317 @@ def enforce_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat
     return mu_L, Sigma_L, mu_H, Sigma_H
 
 
-# Updates and opt routines
-def update_mu_L(T, mu_L, mu_H, LLmodels, HLmodels, Ill, Ihl, omega, lambda_L, hat_mu_L, eta):
-    grad_mu_L = torch.zeros_like(mu_L, dtype=torch.float32) 
-    for n, iota in enumerate(Ill):
-        L_i = torch.from_numpy(LLmodels[iota].compute_mechanism()).float() 
-        V_i = T @ L_i  
-        H_i = torch.from_numpy(HLmodels[omega[iota]].compute_mechanism()).float() 
+# # Updates and opt routines
+# def update_mu_L(T, mu_L, mu_H, LLmodels, HLmodels, Ill, Ihl, omega, lambda_L, hat_mu_L, eta):
+#     grad_mu_L = torch.zeros_like(mu_L, dtype=torch.float32) 
+#     for n, iota in enumerate(Ill):
+#         L_i = torch.from_numpy(LLmodels[iota].compute_mechanism()).float() 
+#         V_i = T @ L_i  
+#         H_i = torch.from_numpy(HLmodels[omega[iota]].compute_mechanism()).float() 
 
-        grad_mu_L += torch.matmul(V_i.T, torch.matmul(V_i, mu_L.float()) - torch.matmul(H_i, mu_H.float())) 
+#         grad_mu_L += torch.matmul(V_i.T, torch.matmul(V_i, mu_L.float()) - torch.matmul(H_i, mu_H.float())) 
     
-    grad_mu_L = (2 / n) * grad_mu_L - 2 * lambda_L * (mu_L - hat_mu_L)
-    mu_L = mu_L + (eta * grad_mu_L)
-    return mu_L
+#     grad_mu_L = (2 / n) * grad_mu_L - 2 * lambda_L * (mu_L - hat_mu_L)
+#     mu_L = mu_L + (eta * grad_mu_L)
+#     return mu_L
 
-def update_mu_H(T, mu_L, mu_H, LLmodels, HLmodels, Ill, Ihl, omega, lambda_H, hat_mu_H, eta):
-    grad_mu_H = torch.zeros_like(mu_H, dtype=torch.float32)  
-    for n, iota in enumerate(Ill):
-        L_i = torch.from_numpy(LLmodels[iota].compute_mechanism()).float()  
-        V_i = T @ L_i  
-        H_i = torch.from_numpy(HLmodels[omega[iota]].compute_mechanism()).float()  
+# def update_mu_H(T, mu_L, mu_H, LLmodels, HLmodels, Ill, Ihl, omega, lambda_H, hat_mu_H, eta):
+#     grad_mu_H = torch.zeros_like(mu_H, dtype=torch.float32)  
+#     for n, iota in enumerate(Ill):
+#         L_i = torch.from_numpy(LLmodels[iota].compute_mechanism()).float()  
+#         V_i = T @ L_i  
+#         H_i = torch.from_numpy(HLmodels[omega[iota]].compute_mechanism()).float()  
 
-        grad_mu_H -= torch.matmul(H_i.T, torch.matmul(V_i, mu_L.float()) - torch.matmul(H_i, mu_H.float()))
+#         grad_mu_H -= torch.matmul(H_i.T, torch.matmul(V_i, mu_L.float()) - torch.matmul(H_i, mu_H.float()))
     
-    grad_mu_H = (2 / n) * grad_mu_H - 2 * lambda_H * (mu_H - hat_mu_H)
+#     grad_mu_H = (2 / n) * grad_mu_H - 2 * lambda_H * (mu_H - hat_mu_H)
     
-    mu_H = mu_H + (eta * grad_mu_H)
-    return mu_H
+#     mu_H = mu_H + (eta * grad_mu_H)
+#     return mu_H
 
 
-def update_Sigma_L_half(T, Sigma_L, LLmodels, Ill, Ihl, omega, lambda_L, hat_Sigma_L, eta):
-    grad_Sigma_L = torch.zeros_like(Sigma_L)
-    term1 = torch.zeros_like(Sigma_L)
-    for n, iota in enumerate(Ill):
-        L_i = torch.from_numpy(LLmodels[iota].compute_mechanism())
-        V_i = T @ L_i.float()
-        term1 = term1 + torch.matmul(V_i.T, V_i)
+# def update_Sigma_L_half(T, Sigma_L, LLmodels, Ill, Ihl, omega, lambda_L, hat_Sigma_L, eta):
+#     grad_Sigma_L = torch.zeros_like(Sigma_L)
+#     term1 = torch.zeros_like(Sigma_L)
+#     for n, iota in enumerate(Ill):
+#         L_i = torch.from_numpy(LLmodels[iota].compute_mechanism())
+#         V_i = T @ L_i.float()
+#         term1 = term1 + torch.matmul(V_i.T, V_i)
 
-    Sigma_L_sqrt     = sqrtm_svd(Sigma_L)  
-    hat_Sigma_L_sqrt = sqrtm_svd(hat_Sigma_L) 
+#     Sigma_L_sqrt     = sqrtm_svd(Sigma_L)  
+#     hat_Sigma_L_sqrt = sqrtm_svd(hat_Sigma_L) 
 
-    term2 = -2 * lambda_L * (Sigma_L_sqrt - hat_Sigma_L_sqrt) @ torch.inverse(Sigma_L_sqrt)
+#     term2 = -2 * lambda_L * (Sigma_L_sqrt - hat_Sigma_L_sqrt) @ torch.inverse(Sigma_L_sqrt)
 
-    grad_Sigma_L = (2 / n) * term1 + term2
+#     grad_Sigma_L = (2 / n) * term1 + term2
 
-    Sigma_L_half = Sigma_L + eta * grad_Sigma_L
-    #Sigma_L_half  = diagonalize(Sigma_L_half)
-    return Sigma_L_half
+#     Sigma_L_half = Sigma_L + eta * grad_Sigma_L
+#     #Sigma_L_half  = diagonalize(Sigma_L_half)
+#     return Sigma_L_half
 
 
-def update_Sigma_L(T, Sigma_L_half, LLmodels, Ill, Ihl, omega, Sigma_H, HLmodels, lambda_param):
-    Sigma_L_final = torch.zeros_like(Sigma_L_half, dtype=torch.float32)  
-    for n, iota in enumerate(Ill):
-        L_i = torch.from_numpy(LLmodels[iota].compute_mechanism()).float()  
-        V_i = T @ L_i  
-        H_i = torch.from_numpy(HLmodels[omega[iota]].compute_mechanism()).float()  
+# def update_Sigma_L(T, Sigma_L_half, LLmodels, Ill, Ihl, omega, Sigma_H, HLmodels, lambda_param):
+#     Sigma_L_final = torch.zeros_like(Sigma_L_half, dtype=torch.float32)  
+#     for n, iota in enumerate(Ill):
+#         L_i = torch.from_numpy(LLmodels[iota].compute_mechanism()).float()  
+#         V_i = T @ L_i  
+#         H_i = torch.from_numpy(HLmodels[omega[iota]].compute_mechanism()).float()  
         
-        Sigma_L_half      = Sigma_L_half.float()
-        V_Sigma_V         = torch.matmul(V_i, torch.matmul(Sigma_L_half, V_i.T))
-        sqrtm_V_Sigma_V   = sqrtm_svd(regmat(V_Sigma_V))
-        prox_Sigma_L_half = torch.matmul(prox_operator(sqrtm_V_Sigma_V, lambda_param), prox_operator(sqrtm_V_Sigma_V, lambda_param).T)
+#         Sigma_L_half      = Sigma_L_half.float()
+#         V_Sigma_V         = torch.matmul(V_i, torch.matmul(Sigma_L_half, V_i.T))
+#         sqrtm_V_Sigma_V   = sqrtm_svd(regmat(V_Sigma_V))
+#         prox_Sigma_L_half = torch.matmul(prox_operator(sqrtm_V_Sigma_V, lambda_param), prox_operator(sqrtm_V_Sigma_V, lambda_param).T)
  
-        ll_term_a = torch.matmul(regmat(torch.linalg.pinv(V_i)), regmat(prox_Sigma_L_half))
-        ll_term_b = torch.linalg.pinv(V_i).T
-        ll_term   = torch.matmul(ll_term_a, ll_term_b)
-        #ll_term           = torch.matmul(torch.matmul(torch.linalg.pinv(V_i), oput.regmat(prox_Sigma_L_half)), torch.linalg.pinv(V_i).T)
+#         ll_term_a = torch.matmul(regmat(torch.linalg.pinv(V_i)), regmat(prox_Sigma_L_half))
+#         ll_term_b = torch.linalg.pinv(V_i).T
+#         ll_term   = torch.matmul(ll_term_a, ll_term_b)
+#         #ll_term           = torch.matmul(torch.matmul(torch.linalg.pinv(V_i), oput.regmat(prox_Sigma_L_half)), torch.linalg.pinv(V_i).T)
 
-        Sigma_H   = Sigma_H.float()  
-        H_Sigma_H = torch.matmul(H_i, torch.matmul(Sigma_H, H_i.T)).float()
-        hl_term   = torch.norm(sqrtm_svd(regmat(H_Sigma_H)), p='fro')
+#         Sigma_H   = Sigma_H.float()  
+#         H_Sigma_H = torch.matmul(H_i, torch.matmul(Sigma_H, H_i.T)).float()
+#         hl_term   = torch.norm(sqrtm_svd(regmat(H_Sigma_H)), p='fro')
 
-        Sigma_L_final = Sigma_L_final + (ll_term * hl_term)
+#         Sigma_L_final = Sigma_L_final + (ll_term * hl_term)
 
-    Sigma_L_final = Sigma_L_final * (2 / n)
-    Sigma_L_final = diagonalize(Sigma_L_final)
+#     Sigma_L_final = Sigma_L_final * (2 / n)
+#     Sigma_L_final = diagonalize(Sigma_L_final)
 
-    return Sigma_L_final
-
-
-def update_Sigma_H_half(T, Sigma_H, HLmodels, Ill, Ihl, omega, lambda_H, hat_Sigma_H, eta):
-    grad_Sigma_H = torch.zeros_like(Sigma_H)
-    term1        = torch.zeros_like(Sigma_H)
-    for n, kappa in enumerate(Ihl):
-        H_i   = torch.from_numpy(HLmodels[kappa].compute_mechanism()).float()
-        term1 = term1 + torch.matmul(H_i.T, H_i)
-
-    Sigma_H_sqrt     = sqrtm_svd(Sigma_H)  
-    hat_Sigma_H_sqrt = sqrtm_svd(hat_Sigma_H) 
-
-    term2 = -2 * lambda_H * (Sigma_H_sqrt - hat_Sigma_H_sqrt) @ torch.inverse(Sigma_H_sqrt)
-
-    grad_Sigma_H = (2 / n) * term1 + term2
-
-    Sigma_H_half = Sigma_H + eta * grad_Sigma_H
-    return Sigma_H_half
-
-def check_for_invalid_values(matrix):
-    if torch.isnan(matrix).any() or torch.isinf(matrix).any():
-        #print("Matrix contains NaN or Inf values!")
-        return True
-    return False
-
-def handle_nans(matrix, replacement_value=0.0):
-    # Replace NaNs with a given value (default is 0)
-    if torch.isnan(matrix).any():
-        print("Warning: NaN values found! Replacing with zero.")
-        matrix = torch.nan_to_num(matrix, nan=replacement_value)
-    return matrix
+#     return Sigma_L_final
 
 
-def update_Sigma_H(T, Sigma_H_half, LLmodels, Ill, Ihl, omega, Sigma_L, HLmodels, lambda_param):
-    if check_for_invalid_values(Sigma_L):
-        print("Sigma_L contains NaN or Inf values!")
-    Sigma_H_final = torch.zeros_like(Sigma_H_half)
-    for n, iota in enumerate(Ill):
-        L_i = torch.from_numpy(LLmodels[iota].compute_mechanism())
-        V_i = T @ L_i.float()
-        H_i = torch.from_numpy(HLmodels[omega[iota]].compute_mechanism()).float()
+# def update_Sigma_H_half(T, Sigma_H, HLmodels, Ill, Ihl, omega, lambda_H, hat_Sigma_H, eta):
+#     grad_Sigma_H = torch.zeros_like(Sigma_H)
+#     term1        = torch.zeros_like(Sigma_H)
+#     for n, kappa in enumerate(Ihl):
+#         H_i   = torch.from_numpy(HLmodels[kappa].compute_mechanism()).float()
+#         term1 = term1 + torch.matmul(H_i.T, H_i)
 
-        H_Sigma_H         = torch.matmul(H_i, torch.matmul(Sigma_H_half, H_i.T))
-        sqrtm_H_Sigma_H   = sqrtm_svd(regmat(H_Sigma_H))
-        prox_Sigma_H_half = torch.matmul(prox_operator(sqrtm_H_Sigma_H, lambda_param), prox_operator(sqrtm_H_Sigma_H, lambda_param).T)
-        hl_term           = torch.matmul(torch.matmul(torch.inverse(H_i), regmat(prox_Sigma_H_half)), torch.inverse(H_i).T)  
+#     Sigma_H_sqrt     = sqrtm_svd(Sigma_H)  
+#     hat_Sigma_H_sqrt = sqrtm_svd(hat_Sigma_H) 
+
+#     term2 = -2 * lambda_H * (Sigma_H_sqrt - hat_Sigma_H_sqrt) @ torch.inverse(Sigma_H_sqrt)
+
+#     grad_Sigma_H = (2 / n) * term1 + term2
+
+#     Sigma_H_half = Sigma_H + eta * grad_Sigma_H
+#     return Sigma_H_half
+
+# def check_for_invalid_values(matrix):
+#     if torch.isnan(matrix).any() or torch.isinf(matrix).any():
+#         #print("Matrix contains NaN or Inf values!")
+#         return True
+#     return False
+
+# def handle_nans(matrix, replacement_value=0.0):
+#     # Replace NaNs with a given value (default is 0)
+#     if torch.isnan(matrix).any():
+#         print("Warning: NaN values found! Replacing with zero.")
+#         matrix = torch.nan_to_num(matrix, nan=replacement_value)
+#     return matrix
+
+
+# def update_Sigma_H(T, Sigma_H_half, LLmodels, Ill, Ihl, omega, Sigma_L, HLmodels, lambda_param):
+#     if check_for_invalid_values(Sigma_L):
+#         print("Sigma_L contains NaN or Inf values!")
+#     Sigma_H_final = torch.zeros_like(Sigma_H_half)
+#     for n, iota in enumerate(Ill):
+#         L_i = torch.from_numpy(LLmodels[iota].compute_mechanism())
+#         V_i = T @ L_i.float()
+#         H_i = torch.from_numpy(HLmodels[omega[iota]].compute_mechanism()).float()
+
+#         H_Sigma_H         = torch.matmul(H_i, torch.matmul(Sigma_H_half, H_i.T))
+#         sqrtm_H_Sigma_H   = sqrtm_svd(regmat(H_Sigma_H))
+#         prox_Sigma_H_half = torch.matmul(prox_operator(sqrtm_H_Sigma_H, lambda_param), prox_operator(sqrtm_H_Sigma_H, lambda_param).T)
+#         hl_term           = torch.matmul(torch.matmul(torch.inverse(H_i), regmat(prox_Sigma_H_half)), torch.inverse(H_i).T)  
         
-        V_Sigma_V = torch.matmul(V_i, torch.matmul(Sigma_L, V_i.T))
-        ll_term   = torch.norm(sqrtm_svd(regmat(V_Sigma_V)))
+#         V_Sigma_V = torch.matmul(V_i, torch.matmul(Sigma_L, V_i.T))
+#         ll_term   = torch.norm(sqrtm_svd(regmat(V_Sigma_V)))
 
-        Sigma_H_final = Sigma_H_final + (ll_term * hl_term)
+#         Sigma_H_final = Sigma_H_final + (ll_term * hl_term)
     
-    Sigma_H_final = Sigma_H_final * (2 / n)
-    Sigma_H_final = diagonalize(Sigma_H_final)
+#     Sigma_H_final = Sigma_H_final * (2 / n)
+#     Sigma_H_final = diagonalize(Sigma_H_final)
     
-    return Sigma_H_final
+#     return Sigma_H_final
 
-def check_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta):
-    # Constraint 1: epsilon^2 - ||mu_L - hat_mu_L||_2^2 - ||Sigma_L^{1/2} - hat_Sigma_L^{1/2}||_2^2 >= 0
-    constraint_L = epsilon**2 - (torch.norm(mu_L - hat_mu_L)**2) - (torch.norm(sqrtm_svd(Sigma_L) - sqrtm_svd(hat_Sigma_L))**2)
+# def check_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta):
+#     # Constraint 1: epsilon^2 - ||mu_L - hat_mu_L||_2^2 - ||Sigma_L^{1/2} - hat_Sigma_L^{1/2}||_2^2 >= 0
+#     constraint_L = epsilon**2 - (torch.norm(mu_L - hat_mu_L)**2) - (torch.norm(sqrtm_svd(Sigma_L) - sqrtm_svd(hat_Sigma_L))**2)
     
-    # Constraint 2: delta^2 - ||mu_H - hat_mu_H||_2^2 - ||Sigma_H^{1/2} - hat_Sigma_H^{1/2}||_2^2 >= 0
-    constraint_H = delta**2 - (torch.norm(mu_H - hat_mu_H)**2) - (torch.norm(sqrtm_svd(Sigma_H) - sqrtm_svd(hat_Sigma_H))**2)
+#     # Constraint 2: delta^2 - ||mu_H - hat_mu_H||_2^2 - ||Sigma_H^{1/2} - hat_Sigma_H^{1/2}||_2^2 >= 0
+#     constraint_H = delta**2 - (torch.norm(mu_H - hat_mu_H)**2) - (torch.norm(sqrtm_svd(Sigma_H) - sqrtm_svd(hat_Sigma_H))**2)
     
-    # Return whether constraints are satisfied (i.e., >= 0) and the constraint violations
-    return constraint_L, constraint_H
+#     # Return whether constraints are satisfied (i.e., >= 0) and the constraint violations
+#     return constraint_L, constraint_H
 
 
-def enforce_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta):
-    constraint_L, constraint_H = check_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta)
+# def enforce_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta):
+#     constraint_L, constraint_H = check_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta)
     
-    # Clip values if constraints are violated
-    if constraint_L < 0:
-        print(f"Constraint for mu_L and Sigma_L violated. Fixing...")
-        mu_L = hat_mu_L + torch.clamp(mu_L - hat_mu_L, min=-epsilon, max=epsilon)
-        Sigma_L = hat_Sigma_L + torch.clamp(Sigma_L - hat_Sigma_L, min=-epsilon, max=epsilon)
+#     # Clip values if constraints are violated
+#     if constraint_L < 0:
+#         print(f"Constraint for mu_L and Sigma_L violated. Fixing...")
+#         mu_L = hat_mu_L + torch.clamp(mu_L - hat_mu_L, min=-epsilon, max=epsilon)
+#         Sigma_L = hat_Sigma_L + torch.clamp(Sigma_L - hat_Sigma_L, min=-epsilon, max=epsilon)
     
-    if constraint_H < 0:
-        print(f"Constraint for mu_H and Sigma_H violated. Fixing...")
-        mu_H = hat_mu_H + torch.clamp(mu_H - hat_mu_H, min=-delta, max=delta)
-        Sigma_H = hat_Sigma_H + torch.clamp(Sigma_H - hat_Sigma_H, min=-delta, max=delta)
+#     if constraint_H < 0:
+#         print(f"Constraint for mu_H and Sigma_H violated. Fixing...")
+#         mu_H = hat_mu_H + torch.clamp(mu_H - hat_mu_H, min=-delta, max=delta)
+#         Sigma_H = hat_Sigma_H + torch.clamp(Sigma_H - hat_Sigma_H, min=-delta, max=delta)
     
-    return mu_L, Sigma_L, mu_H, Sigma_H
+#     return mu_L, Sigma_L, mu_H, Sigma_H
 
-def optimize_max(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, Ill, Ihl, omega, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, lambda_L, lambda_H, lambda_param, eta, num_steps_max, epsilon, delta, seed):
+# def optimize_max(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, Ill, Ihl, omega, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, lambda_L, lambda_H, lambda_param, eta, num_steps_max, epsilon, delta, seed):
     
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+#     torch.manual_seed(seed)
+#     torch.cuda.manual_seed_all(seed)
 
-    for t in range(num_steps_max): 
-        mu_L         = update_mu_L(T, mu_L, mu_H, LLmodels, HLmodels, Ill, Ihl, omega, lambda_L, hat_mu_L, eta)
-        mu_H         = update_mu_H(T, mu_L, mu_H, LLmodels, HLmodels, Ill, Ihl, omega, lambda_H, hat_mu_H, eta)
-        Sigma_L_half = update_Sigma_L_half(T, Sigma_L, LLmodels, Ill, Ihl, omega, lambda_L, hat_Sigma_L, eta)
-        Sigma_L      = update_Sigma_L(T, Sigma_L_half, LLmodels, Ill, Ihl, omega, Sigma_H, HLmodels, lambda_param)
-        Sigma_H_half = update_Sigma_H_half(T, Sigma_H, HLmodels, Ill, Ihl, omega, lambda_H, hat_Sigma_H, eta)
-        Sigma_H      = update_Sigma_H(T, Sigma_H_half, LLmodels, Ill, Ihl, omega, Sigma_L, HLmodels, lambda_param)
+#     for t in range(num_steps_max): 
+#         mu_L         = update_mu_L(T, mu_L, mu_H, LLmodels, HLmodels, Ill, Ihl, omega, lambda_L, hat_mu_L, eta)
+#         mu_H         = update_mu_H(T, mu_L, mu_H, LLmodels, HLmodels, Ill, Ihl, omega, lambda_H, hat_mu_H, eta)
+#         Sigma_L_half = update_Sigma_L_half(T, Sigma_L, LLmodels, Ill, Ihl, omega, lambda_L, hat_Sigma_L, eta)
+#         Sigma_L      = update_Sigma_L(T, Sigma_L_half, LLmodels, Ill, Ihl, omega, Sigma_H, HLmodels, lambda_param)
+#         Sigma_H_half = update_Sigma_H_half(T, Sigma_H, HLmodels, Ill, Ihl, omega, lambda_H, hat_Sigma_H, eta)
+#         Sigma_H      = update_Sigma_H(T, Sigma_H_half, LLmodels, Ill, Ihl, omega, Sigma_L, HLmodels, lambda_param)
         
-        # Project onto Gelbrich balls
-        mu_L, Sigma_L = project_onto_gelbrich_ball(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
-        mu_H, Sigma_H = project_onto_gelbrich_ball(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
+#         # Project onto Gelbrich balls
+#         mu_L, Sigma_L = project_onto_gelbrich_ball(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
+#         mu_H, Sigma_H = project_onto_gelbrich_ball(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
         
-        # Verify constraints
-        satisfied_L, dist_L, epsi = verify_gelbrich_constraint(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
-        satisfied_H, dist_H, delt = verify_gelbrich_constraint(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
+#         # Verify constraints
+#         satisfied_L, dist_L, epsi = verify_gelbrich_constraint(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
+#         satisfied_H, dist_H, delt = verify_gelbrich_constraint(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
         
-        if not satisfied_L:
-            print(f"Warning: Constraints not satisfied for mu_L and Sigma_L! Distance: {dist_L} and epsilon = {epsi}")
+#         if not satisfied_L:
+#             print(f"Warning: Constraints not satisfied for mu_L and Sigma_L! Distance: {dist_L} and epsilon = {epsi}")
 
-        if not satisfied_H:
-            print(f"Warning: Constraints not satisfied for mu_H and Sigma_H! Distance: {dist_H} and delta = {delt}")
+#         if not satisfied_H:
+#             print(f"Warning: Constraints not satisfied for mu_H and Sigma_H! Distance: {dist_H} and delta = {delt}")
 
-        #mu_L, Sigma_L, mu_H, Sigma_H = enforce_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta)
+#         #mu_L, Sigma_L, mu_H, Sigma_H = enforce_constraints(mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, epsilon, delta)
         
-        obj = 0
+#         obj = 0
         
-        for i, iota in enumerate(Ill):
-            L_i = torch.from_numpy(LLmodels[iota].compute_mechanism())
-            V_i = T @ L_i.float()
-            H_i = torch.from_numpy(HLmodels[omega[iota]].compute_mechanism()).float()
+#         for i, iota in enumerate(Ill):
+#             L_i = torch.from_numpy(LLmodels[iota].compute_mechanism())
+#             V_i = T @ L_i.float()
+#             H_i = torch.from_numpy(HLmodels[omega[iota]].compute_mechanism()).float()
                         
-            L_i_mu_L = V_i @ mu_L
-            H_i_mu_H = H_i @ mu_H
-            term1 = torch.norm(L_i_mu_L.float() - H_i_mu_H.float())**2
+#             L_i_mu_L = V_i @ mu_L
+#             H_i_mu_H = H_i @ mu_H
+#             term1 = torch.norm(L_i_mu_L.float() - H_i_mu_H.float())**2
             
-            V_Sigma_V = regmat(V_i.float() @ Sigma_L.float() @ V_i.T.float())
-            H_Sigma_H = regmat(H_i.float() @ Sigma_H.float() @ H_i.T.float())
+#             V_Sigma_V = regmat(V_i.float() @ Sigma_L.float() @ V_i.T.float())
+#             H_Sigma_H = regmat(H_i.float() @ Sigma_H.float() @ H_i.T.float())
 
-            term2 = torch.trace(V_Sigma_V)
-            term3 = torch.trace(H_Sigma_H)
+#             term2 = torch.trace(V_Sigma_V)
+#             term3 = torch.trace(H_Sigma_H)
             
-            sqrtVSV = sqrtm_svd(V_Sigma_V)
-            sqrtHSH = sqrtm_svd(H_Sigma_H)
+#             sqrtVSV = sqrtm_svd(V_Sigma_V)
+#             sqrtHSH = sqrtm_svd(H_Sigma_H)
 
-            term4 = -2 * torch.trace(sqrtm_svd(regmat(sqrtVSV @ sqrtHSH @ sqrtVSV)))
-            #term4 = -2 * torch.norm(sqrtVSV @ sqrtHSH, 'nuc')
+#             term4 = -2 * torch.trace(sqrtm_svd(regmat(sqrtVSV @ sqrtHSH @ sqrtVSV)))
+#             #term4 = -2 * torch.norm(sqrtVSV @ sqrtHSH, 'nuc')
             
-            obj = obj + (term1 + term2 + term3 + term4)
+#             obj = obj + (term1 + term2 + term3 + term4)
         
-        obj = obj/i
+#         obj = obj/i
         
-        #print(f"Max step {t+1}/{num_steps_max}, Objective: {obj.item()}")
+#         #print(f"Max step {t+1}/{num_steps_max}, Objective: {obj.item()}")
 
-    return obj, mu_L, Sigma_L, mu_H, Sigma_H
+#     return obj, mu_L, Sigma_L, mu_H, Sigma_H
 
-def optimize_min(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels,  Ill, Ihl, omega, num_steps_min, optimizer_T, seed):
+# def optimize_min(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels,  Ill, Ihl, omega, num_steps_min, optimizer_T, seed):
 
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+#     torch.manual_seed(seed)
+#     torch.cuda.manual_seed_all(seed)
 
-    objective_T = 0 
-    for step in range(num_steps_min):
-        objective_T = 0  # Reset objective at the start of each step
-        for n, iota in enumerate(Ill):
-            L_i = torch.from_numpy(LLmodels[iota].compute_mechanism()).float()
-            H_i = torch.from_numpy(HLmodels[omega[iota]].compute_mechanism()).float()
+#     objective_T = 0 
+#     for step in range(num_steps_min):
+#         objective_T = 0  # Reset objective at the start of each step
+#         for n, iota in enumerate(Ill):
+#             L_i = torch.from_numpy(LLmodels[iota].compute_mechanism()).float()
+#             H_i = torch.from_numpy(HLmodels[omega[iota]].compute_mechanism()).float()
 
-            L_i_mu_L = L_i @ mu_L  
-            H_i_mu_H = H_i @ mu_H 
+#             L_i_mu_L = L_i @ mu_L  
+#             H_i_mu_H = H_i @ mu_H 
 
-            term1 = torch.norm(T @ L_i_mu_L - H_i_mu_H) ** 2
-            term2 = torch.trace(T @ L_i @ Sigma_L @ L_i.T @ T.T)
-            term3 = torch.trace(H_i @ Sigma_H @ H_i.T)
+#             term1 = torch.norm(T @ L_i_mu_L - H_i_mu_H) ** 2
+#             term2 = torch.trace(T @ L_i @ Sigma_L @ L_i.T @ T.T)
+#             term3 = torch.trace(H_i @ Sigma_H @ H_i.T)
             
-            L_i_Sigma_L = regmat(T @ L_i @ Sigma_L @ L_i.T @ T.T)
-            H_i_Sigma_H = regmat(H_i @ Sigma_H @ H_i.T)
+#             L_i_Sigma_L = regmat(T @ L_i @ Sigma_L @ L_i.T @ T.T)
+#             H_i_Sigma_H = regmat(H_i @ Sigma_H @ H_i.T)
 
-            #term4 = -2 * torch.norm(oput.sqrtm_svd(L_i_Sigma_L) @ oput.sqrtm_svd(H_i_Sigma_H), 'nuc')
-            term4 = -2 * torch.trace(sqrtm_svd(sqrtm_svd(L_i_Sigma_L) @ H_i_Sigma_H @ sqrtm_svd(L_i_Sigma_L)))
+#             #term4 = -2 * torch.norm(oput.sqrtm_svd(L_i_Sigma_L) @ oput.sqrtm_svd(H_i_Sigma_H), 'nuc')
+#             term4 = -2 * torch.trace(sqrtm_svd(sqrtm_svd(L_i_Sigma_L) @ H_i_Sigma_H @ sqrtm_svd(L_i_Sigma_L)))
 
-            objective_T += term1 + term2 + term3 + term4
+#             objective_T += term1 + term2 + term3 + term4
 
-        objective_T = objective_T/n
+#         objective_T = objective_T/n
 
-        optimizer_T.zero_grad() 
-        objective_T.backward(retain_graph=True)  
-        # Log the gradient norm
-        grad_norm = T.grad.norm().item()
-        #print(f"Step {step+1}/{num_steps_min}: Objective = {objective_T.item()}, Gradient Norm = {grad_norm}")
+#         optimizer_T.zero_grad() 
+#         objective_T.backward(retain_graph=True)  
+#         # Log the gradient norm
+#         grad_norm = T.grad.norm().item()
+#         #print(f"Step {step+1}/{num_steps_min}: Objective = {objective_T.item()}, Gradient Norm = {grad_norm}")
 
-        # # Gradient clipping
-        # clip_grad_norm_([T], 1.0)
+#         # # Gradient clipping
+#         # clip_grad_norm_([T], 1.0)
 
-        optimizer_T.step()      
+#         optimizer_T.step()      
 
-        #print(f"Min step {step+1}/{num_steps_min}, Objective: {objective_T.item()}")
+#         #print(f"Min step {step+1}/{num_steps_min}, Objective: {objective_T.item()}")
 
-    return objective_T, T 
+#     return objective_T, T 
 
-def optimize_min_max(mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, 
-                     hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, Ill, Ihl, omega,
-                     epsilon, delta, lambda_L, lambda_H, lambda_param, 
-                     eta_min, eta_max, max_iter, num_steps_min, num_steps_max, tol, seed):
+# def optimize_min_max(mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, 
+#                      hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, Ill, Ihl, omega,
+#                      epsilon, delta, lambda_L, lambda_H, lambda_param, 
+#                      eta_min, eta_max, max_iter, num_steps_min, num_steps_max, tol, seed):
     
-    j = 0
-    torch.manual_seed(seed) 
-    torch.cuda.manual_seed_all(seed)
+#     j = 0
+#     torch.manual_seed(seed) 
+#     torch.cuda.manual_seed_all(seed)
 
-    T           = torch.randn(mu_H.shape[0], mu_L.shape[0], requires_grad=True)
-    #optimizer_T = torch.optim.Adam([T], lr=0.001)
-    optimizer_T = torch.optim.Adam([T], lr=eta_min, eps=1e-8)
+#     T           = torch.randn(mu_H.shape[0], mu_L.shape[0], requires_grad=True)
+#     #optimizer_T = torch.optim.Adam([T], lr=0.001)
+#     optimizer_T = torch.optim.Adam([T], lr=eta_min, eps=1e-8)
 
-    previous_objective       = float('inf')  
-    for epoch in tqdm(range(max_iter)):
-        #print("MINIMIZING T")
-        objective_T, T = optimize_min(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, Ill, Ihl, omega, num_steps_min, optimizer_T, seed)
+#     previous_objective       = float('inf')  
+#     for epoch in tqdm(range(max_iter)):
+#         #print("MINIMIZING T")
+#         objective_T, T = optimize_min(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, Ill, Ihl, omega, num_steps_min, optimizer_T, seed)
         
-        #print()
-        #print("MAX mu_L, Sigma_L, mu_H, Sigma_H")
-        objective_theta, mu_L, Sigma_L, mu_H, Sigma_H = optimize_max(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels,  Ill, Ihl, omega, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
-                                                                         lambda_L, lambda_H, lambda_param, eta_max, num_steps_max, epsilon, delta, seed)
-        if contains_negative(Sigma_L) == True:
-            print('Sigma_L contains negative values')
-            print(Sigma_L)
-            print( )
-        if contains_negative(Sigma_H) == True:
-            print('Sigma_H contains negative values')
-            print(Sigma_H)
-            print( )
+#         #print()
+#         #print("MAX mu_L, Sigma_L, mu_H, Sigma_H")
+#         objective_theta, mu_L, Sigma_L, mu_H, Sigma_H = optimize_max(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels,  Ill, Ihl, omega, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
+#                                                                          lambda_L, lambda_H, lambda_param, eta_max, num_steps_max, epsilon, delta, seed)
+#         if contains_negative(Sigma_L) == True:
+#             print('Sigma_L contains negative values')
+#             print(Sigma_L)
+#             print( )
+#         if contains_negative(Sigma_H) == True:
+#             print('Sigma_H contains negative values')
+#             print(Sigma_H)
+#             print( )
 
-        # Check for convergence by comparing the difference in objective values
-        criterion = abs(previous_objective - objective_T.item())
+#         # Check for convergence by comparing the difference in objective values
+#         criterion = abs(previous_objective - objective_T.item())
         
-        if criterion < tol:
-            print(f"Convergence reached at epoch {epoch+1} with objective {objective_T.item()}")
-            break
+#         if criterion < tol:
+#             print(f"Convergence reached at epoch {epoch+1} with objective {objective_T.item()}")
+#             break
 
-        previous_objective = objective_T.item()
+#         previous_objective = objective_T.item()
 
-    print("Final T:", T)
-    print("Final mu_L:", mu_L)
-    print("Final Sigma_L:", Sigma_L)
-    print("Final mu_H:", mu_H)
-    print("Final Sigma_H:", Sigma_H)
+#     print("Final T:", T)
+#     print("Final mu_L:", mu_L)
+#     print("Final Sigma_L:", Sigma_L)
+#     print("Final mu_H:", mu_H)
+#     print("Final Sigma_H:", Sigma_H)
 
-    return mu_L, Sigma_L, mu_H, Sigma_H, T
+#     return mu_L, Sigma_L, mu_H, Sigma_H, T
 
 def contains_negative(matrix):
     return (matrix < 0).any().item()

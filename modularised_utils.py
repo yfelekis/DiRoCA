@@ -21,6 +21,8 @@ from scipy.stats import norm
 from scipy.spatial.distance import jensenshannon
 from scipy.stats import wasserstein_distance
 
+from sklearn.linear_model import LinearRegression, Ridge
+
 from src.CBN import CausalBayesianNetwork as CBN
 import operations as ops
 
@@ -193,7 +195,7 @@ def wasserstein_dist(P, Q):
     
     return dist
 
-def wasserstein_moments(mu1, cov1, mu2, cov2):
+def compute_wasserstein(mu1, cov1, mu2, cov2):
     
     mean_diff  = np.linalg.norm(mu1 - mu2)
     cov_sqrt   = sqrtm(np.dot(np.dot(sqrtm(cov2), cov1), sqrtm(cov2)))
@@ -202,10 +204,48 @@ def wasserstein_moments(mu1, cov1, mu2, cov2):
         cov_sqrt = cov_sqrt.real
         
     trace_term = np.trace(cov1 + cov2 - 2 * cov_sqrt)
-    #dist      = np.sqrt(mean_diff**2 + trace_term)
     dist       = mean_diff**2 + trace_term
     
     return dist
+
+def compute_jensenshannon(samples1, samples2, bins=100):
+    """
+    Compute Jensen-Shannon divergence between two sets of samples
+    
+    Args:
+        samples1: (n_samples x n_vars) array of samples from first distribution
+        samples2: (n_samples x n_vars) array of samples from second distribution
+        bins: number of bins for histogram
+    """
+    # For each dimension
+    js_div = 0
+    n_dims = samples1.shape[1]
+    
+    for dim in range(n_dims):
+        # Compute histograms for this dimension
+        min_val = min(samples1[:, dim].min(), samples2[:, dim].min())
+        max_val = max(samples1[:, dim].max(), samples2[:, dim].max())
+        
+        hist1, bin_edges = np.histogram(samples1[:, dim], bins=bins, range=(min_val, max_val), density=True)
+        hist2, _ = np.histogram(samples2[:, dim], bins=bins, range=(min_val, max_val), density=True)
+        
+        # Convert to probabilities
+        p = hist1 / hist1.sum()
+        q = hist2 / hist2.sum()
+        
+        # Add small constant to avoid log(0)
+        p = p + 1e-10
+        q = q + 1e-10
+        
+        # Normalize again
+        p = p / p.sum()
+        q = q / q.sum()
+        
+        # Compute JS divergence for this dimension
+        js_div += jensenshannon(p, q)
+    
+    # Return average JS divergence across dimensions
+    return js_div / n_dims
 
 def mat_wasserstein_distance(matrix1, matrix2):
     """
@@ -355,7 +395,7 @@ def sample_moments_U(mu_hat, Sigma_hat, bound, mu_method = 'perturbation', Sigma
             Sigma = sample_covariance(Sigma_hat, bound, Sigma_method, Sigma_scale)
                                
             # 3. Check if the new mean and covariance satisfy the Wasserstein distance constraint
-            if wasserstein_moments(mu_hat, Sigma_hat, mu, Sigma) <= bound**2:
+            if compute_wasserstein(mu_hat, Sigma_hat, mu, Sigma) <= bound**2:
                 samples.append((mu, Sigma))
                 #environments.append(Environment('gaussian', (mu, Sigma), dag))
                 break
@@ -472,10 +512,6 @@ def generate_perturbed_datasets(D, bound, num_envs=1, p=2):
 #     return coeffs
 # ######################## KEEP THIS! ########################
 
-from sklearn.linear_model import LinearRegression, Ridge
-import networkx as nx
-import numpy as np
-
 def get_coefficients(data_list, G, weights=None, use_ridge=False, alpha=1.0):
     """
     Estimates the structural coefficients for the edges in the causal model
@@ -546,65 +582,6 @@ def get_coefficients(data_list, G, weights=None, use_ridge=False, alpha=1.0):
                 coeffs[(p, node)] = coef  # Store coefficient as (parent, child)
 
     return coeffs
-
-# def get_coefficients(data_list, G, weights=None):
-#     """
-#     Estimates the structural coefficients for the edges in the causal model
-#     using both observational and interventional datasets.
-    
-#     Args:
-#     - data_list (list of ndarray): List of n x k datasets where n is the number of samples and k is the number of variables.
-#     - G (DiGraph): The underlying DAG of the causal model.
-#     - weights (list of float): List of weights corresponding to each dataset (optional).
-    
-#     Returns:
-#     - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
-#     """
-#     nodes = list(G.nodes)
-#     coeffs = {}
-
-#     # Check if only a single dataset is provided
-#     if isinstance(data_list, np.ndarray):
-#         data_list = [data_list]  # Convert to a list for consistency
-
-#     # Default weights to 1 if not provided
-#     if weights is None:
-#         weights = [1] * len(data_list)
-
-#     # Initialize an empty list to hold concatenated datasets
-#     combined_data = []
-#     sample_weights = []
-
-#     # Combine datasets and create sample weights
-#     for data, weight in zip(data_list, weights):
-#         num_samples = data.shape[0]  # Number of samples in the dataset
-#         combined_data.append(data)  # Append the current dataset
-#         sample_weights.extend([weight] * num_samples)  # Extend weights list
-
-#     # Concatenate all datasets into a single array
-#     combined_data = np.vstack(combined_data)
-#     sample_weights = np.array(sample_weights)  # Convert to numpy array
-
-#     # Ensure that sample_weights matches the number of samples
-#     if sample_weights.shape[0] != combined_data.shape[0]:
-#         raise ValueError("Sample weights shape does not match combined data shape!")
-
-#     for node in nx.topological_sort(G):
-#         node_idx = nodes.index(node)
-#         parents = list(G.predecessors(node))
-        
-#         if parents:
-#             parent_indices = [nodes.index(p) for p in parents]
-#             X_parents = combined_data[:, parent_indices]  # Combined features
-#             y = combined_data[:, node_idx]  # Combined target variable
-            
-#             # Perform weighted linear regression
-#             reg = LinearRegression().fit(X_parents, y, sample_weight=sample_weights)
-            
-#             for p, coef in zip(parents, reg.coef_):
-#                 coeffs[(p, node)] = coef  # Store as (parent, child) pair
-
-#     return coeffs
 
 
 def lan_abduction(data, G, coeffs):
@@ -917,86 +894,6 @@ def get_mle_coefficients_gmm(data_list, G, weights=None, n_components=2):
 
     return coeffs
 
-# def weighted_likelihood(params, X_parents, y, weights):
-#     """
-#     Custom weighted likelihood function for MLE with non-Gaussian noise.
-    
-#     Args:
-#     - params (ndarray): Coefficients for the linear model.
-#     - X_parents (ndarray): Parent data matrix.
-#     - y (ndarray): Target data.
-#     - weights (ndarray): Weights for each sample.
-    
-#     Returns:
-#     - weighted_likelihood (float): Weighted negative log-likelihood (to be minimized).
-#     """
-#     predicted = np.dot(X_parents, params)  # Linear relationship
-#     residuals = y - predicted               # Residuals (errors)
-
-#     # Use L1 loss for robust estimation, weighted by the sample weights
-#     return np.sum(weights * np.abs(residuals))  # Weighted L1 loss
-
-# def get_mle_coefficients(data_list, G, weights=None):
-#     """
-#     Estimates the structural coefficients for the edges in the causal model using MLE and
-#     multiple datasets (observational and/or interventional).
-    
-#     Args:
-#     - data_list (list of ndarray): List of n x k datasets where n is the number of samples and k is the number of variables.
-#     - G (DiGraph): The underlying DAG of the causal model.
-#     - weights (list of float): List of weights corresponding to each dataset (optional).
-    
-#     Returns:
-#     - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
-#     """
-#     nodes = list(G.nodes)
-#     coeffs = {}
-
-#     # Check if only a single dataset is provided
-#     if isinstance(data_list, np.ndarray):
-#         data_list = [data_list]  # Convert to a list for consistency
-
-#     # Default weights to 1 if not provided
-#     if weights is None:
-#         weights = [1] * len(data_list)
-
-#     # Initialize an empty list to hold concatenated datasets
-#     combined_data = []
-#     sample_weights = []
-
-#     # Combine datasets and create sample weights
-#     for data, weight in zip(data_list, weights):
-#         num_samples = data.shape[0]  # Number of samples in the dataset
-#         combined_data.append(data)  # Append the current dataset
-#         sample_weights.extend([weight] * num_samples)  # Extend weights list
-
-#     # Concatenate all datasets into a single array
-#     combined_data = np.vstack(combined_data)
-#     sample_weights = np.array(sample_weights)  # Convert to numpy array
-
-#     # Ensure that sample_weights matches the number of samples
-#     if sample_weights.shape[0] != combined_data.shape[0]:
-#         raise ValueError("Sample weights shape does not match combined data shape!")
-
-#     for node in nx.topological_sort(G):
-#         node_idx = nodes.index(node)
-#         parents = list(G.predecessors(node))
-        
-#         if parents:
-#             parent_indices = [nodes.index(p) for p in parents]
-#             X_parents = combined_data[:, parent_indices]  # Combined features
-#             y = combined_data[:, node_idx]  # Combined target variable
-            
-#             # Use MLE to estimate coefficients
-#             init_params = np.zeros(len(parents))  # Initial guess for coefficients
-            
-#             # Optimize the negative likelihood (maximize likelihood by minimizing -logL)
-#             result = minimize(weighted_likelihood, init_params, args=(X_parents, y, sample_weights), method='BFGS')
-            
-#             for p, coef in zip(parents, result.x):
-#                     coeffs[(p, node)] = coef  # Store as (parent, child) pair
-        
-#     return coeffs
 
 ######################## LOADERS ########################
 def load_model(experiment, model):
@@ -1028,43 +925,7 @@ def load_exogenous(experiment, model):
     
 def load_T(experiment):
     return joblib.load(f'data/{experiment}/Tau.pkl')
-# def gauss_lan_abduction(mu_X, Sigma_X, A):
-    
-#     mu_X     = np.asarray(mu_X)
-#     Sigma_X  = np.asarray(Sigma_X)
-#     #dSigma_X = np.zeros((len(Sigma_X), len(Sigma_X)))
-    
-#     #np.fill_diagonal(dSigma_X, Sigma_X)
-#     size    = len(mu_X)    
-    
-#     A = np.asarray(A)
-    
-#     if not np.allclose(A, np.triu(A)):
-#         raise ValueError("Matrix A must be upper triangular.")
-    
-#     I = np.eye(A.shape[0])
-#     K = I - A
-   
-#     mu_E    = K @ mu_X.T
-#     Sigma_E = K @ Sigma_X @ K.T 
 
-#     return mu_E, Sigma_E
-
-# def sample_distros_Gelbrich(sampled_means, sampled_covariances):
-    
-#     distributions = []
-    
-#     for mu, Sigma in zip(sampled_means, sampled_covariances):
-        
-#         Sigma = Sigma.reshape(1, -1)  
-        
-#         gmm   = GaussianMixture(n_components=1)
-        
-#         # Set the means and covariances
-#         gmm.means_       = mu.reshape(1, -1)  # Reshape to (1, m)
-#         gmm.covariances_ = Sigma.reshape(1, mu.size, mu.size)  # Reshape to (1, m, m)
-#         gmm.weights_     = np.array([1.0])  # Set the weight of the component
-        
-#         distributions.append(gmm)
-
-#     return distributions
+def load_type_to_params(experiment, noise_type, level):
+    type_to_params_dict = joblib.load(f'data/{experiment}/type_to_params.pkl')
+    return type_to_params_dict[noise_type][level]
