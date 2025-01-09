@@ -4,6 +4,7 @@ from modularised_utils import compute_wasserstein
 import torch
 from sklearn.mixture import GaussianMixture
 from scipy.linalg import sqrtm
+import seaborn as sns
 
 
 def contaminate_linear_relationships(data, contamination_fraction=0.3, contamination_type='multiplicative'):
@@ -65,24 +66,152 @@ def contaminate_linear_relationships(data, contamination_fraction=0.3, contamina
 
 def plot_contamination_effects(original, contaminated):
     """
-    Visualize the effects of contamination on the data relationships.
+    Visualize the effects of contamination on the data relationships using Seaborn.
     """
+    
     n_vars = original.shape[1]
     fig, axes = plt.subplots(2, n_vars-1, figsize=(15, 10))
     
     # Plot relationships between consecutive variables
     for i in range(n_vars-1):
         # Original data
-        axes[0,i].scatter(original[:,i], original[:,i+1], alpha=0.5, s=1)
+        sns.scatterplot(data=None, 
+                       x=original[:,i], 
+                       y=original[:,i+1], 
+                       alpha=0.5, 
+                       s=10,
+                       color='purple',
+                       ax=axes[0,i])
         axes[0,i].set_title(f'Original: Var{i+1} vs Var{i+2}')
         axes[0,i].set_xlabel(f'Var{i+1}')
         axes[0,i].set_ylabel(f'Var{i+2}')
         
         # Contaminated data
-        axes[1,i].scatter(contaminated[:,i], contaminated[:,i+1], alpha=0.5, s=1)
+        sns.scatterplot(data=None, 
+                       x=contaminated[:,i], 
+                       y=contaminated[:,i+1], 
+                       alpha=0.5, 
+                       s=10,
+                       color='green',
+                       ax=axes[1,i])
         axes[1,i].set_title(f'Contaminated: Var{i+1} vs Var{i+2}')
         axes[1,i].set_xlabel(f'Var{i+1}')
         axes[1,i].set_ylabel(f'Var{i+2}')
+    
+    # Optional: Set style for all subplots
+    sns.set_style("whitegrid")
+    
+    plt.tight_layout()
+    plt.show()
+
+def plot_abstraction_error(abstraction_error_dict):
+    """
+    Plot abstraction errors with error bars using Seaborn.
+    """
+    
+    # Extract data from dictionary
+    methods = list(abstraction_error_dict.keys())
+    means = [v[0] for v in abstraction_error_dict.values()]
+    errors = [v[1] for v in abstraction_error_dict.values()]
+    
+    # Set style
+    sns.set_style("whitegrid")
+    
+    # Create figure
+    plt.figure(figsize=(10, 6))
+    
+    # Create error bar plot
+    sns.scatterplot(
+        x=methods,
+        y=means,
+        color='purple',
+        s=100  # marker size
+    )
+    
+    # Add error bars
+    plt.errorbar(
+        x=methods,
+        y=means,
+        yerr=errors,
+        fmt='none',  # no connecting lines
+        color='green',
+        capsize=5,
+        capthick=2,
+        elinewidth=2
+    )
+    
+    # Customize plot
+    plt.yscale('log')  # log scale for y-axis
+    plt.xticks(rotation=45, ha='right')  # rotate x labels
+    plt.title('Abstraction Error by Method')
+    plt.xlabel('Method')
+    plt.ylabel('Error')
+    
+    # Adjust layout to prevent label cutoff
+    plt.tight_layout()
+    
+    # Show plot
+    plt.show()
+    
+    return
+
+def plot_distribution_shifts(original, modified):
+    """
+    Visualize the changes in distributions using Seaborn.
+    """    
+    n_vars = original.shape[1]
+    plt.figure(figsize=(15, 5))
+    
+    for i in range(n_vars):
+        plt.subplot(1, n_vars, i+1)
+        
+        # Plot original distribution with Seaborn (purple)
+        sns.kdeplot(data=original[:, i], 
+                   color='green', 
+                   alpha=0.5,
+                   label=f'Original (μ={np.mean(original[:, i]):.2f}, σ²={np.var(original[:, i]):.2f})',
+                   fill=True)
+        
+        # Plot modified distribution with Seaborn (green)
+        sns.kdeplot(data=modified[:, i], 
+                   color='purple', 
+                   alpha=0.5,
+                   label=f'Modified (μ={np.mean(modified[:, i]):.2f}, σ²={np.var(modified[:, i]):.2f})',
+                   fill=True)
+        
+        plt.title(f'Variable {i+1} Distribution')
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    plt.tight_layout()
+    plt.show()
+    
+def plot_distribution_changes(original, modified, title="Distribution Changes"):
+    """
+    Visualize the changes in marginal distributions for each dimension.
+    
+    Args:
+        original: Original data array of shape (n_samples, n_dims)
+        modified: Modified data array of shape (n_samples, n_dims)
+        title: Optional title for the plot
+    """
+    n_vars = original.shape[1]
+    fig = plt.figure(figsize=(15, 5))
+    
+    for i in range(n_vars):
+        plt.subplot(1, n_vars, i+1)
+        
+        # Plot original distribution
+        plt.hist(original[:, i], bins=50, alpha=0.5, color='lightblue',
+                label=f'Original (μ={np.mean(original[:, i]):.2f}, σ²={np.var(original[:, i]):.2f})', 
+                density=True)
+        
+        # Plot modified distribution
+        plt.hist(modified[:, i], bins=50, alpha=0.5, color='orange',
+                label=f'Modified (μ={np.mean(modified[:, i]):.2f}, σ²={np.var(modified[:, i]):.2f})', 
+                density=True)
+        
+        plt.title(f'Variable {i+1} Distribution')
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     
     plt.tight_layout()
     plt.show()

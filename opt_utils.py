@@ -42,9 +42,13 @@ def monge_map(m_alpha, Sigma_alpha, m_beta, Sigma_beta):
 
 # Proximal operator of a matrix frobenious norm
 def prox_operator(A, lambda_param):
-    frobenius_norm = torch.norm(A, p='fro')
+    U, S, V = torch.svd(A)
+
+    frobenius_norm = torch.norm(S, p='fro')
     scaling_factor = torch.max(1 - lambda_param / frobenius_norm, torch.zeros_like(frobenius_norm))
-    return scaling_factor * A
+    S_hat = scaling_factor * S
+
+    return U @ torch.diag(S_hat) @ V.T
 
 def diagonalize(A):
     # Get eigenvalues and eigenvectors
@@ -171,198 +175,291 @@ def sqrtm_eig(A):
     
     return sqrt_A
 
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
 
 def plot_epoch_progress(epoch, epoch_min_objectives, epoch_max_objectives, robust):
-    """Plot optimization progress for current epoch"""
+    """Plot optimization progress for current epoch using Seaborn"""
+    sns.set_style("whitegrid")
+    
     if robust:
-        # Create subplot with both min and max
-        fig = make_subplots(rows=1, cols=2, 
-                           subplot_titles=(f'Minimization Steps (Epoch {epoch+1})', 
-                                         f'Maximization Steps (Epoch {epoch+1})'))
+        # Create figure with two subplots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
         
-        # Add min step objectives
-        fig.add_trace(
-            go.Scatter(y=epoch_min_objectives, 
-                      mode='lines', 
-                      name='Min steps',
-                      line=dict(color='green')),
-            row=1, col=1
+        # Plot min step objectives
+        sns.lineplot(
+            data=epoch_min_objectives,
+            color='green',
+            label='Min steps',
+            ax=ax1
         )
-
-        # Add max step objectives
-        fig.add_trace(
-            go.Scatter(y=epoch_max_objectives, 
-                      mode='lines', 
-                      name='Max steps',
-                      line=dict(color='purple')),
-            row=1, col=2
-        )
+        ax1.set_title(f'Minimization Steps (Epoch {epoch+1})')
+        ax1.set_xlabel('Step')
+        ax1.set_ylabel('Objective T Value')
         
-        # Update both axes
-        for row, col in [(1,1), (1,2)]:
-            fig.update_xaxes(
-                title_text="Step", 
-                row=row, col=col,
-                showgrid=True,
-                gridcolor='lightgray',
-                showline=True,
-                linewidth=1,
-                linecolor='black'
-            )
-        
-        fig.update_yaxes(
-            title_text="Objective T Value", 
-            row=1, col=1,
-            showgrid=True,
-            gridcolor='lightgray',
-            showline=True,
-            linewidth=1,
-            linecolor='black'
+        # Plot max step objectives
+        sns.lineplot(
+            data=epoch_max_objectives,
+            color='purple',
+            label='Max steps',
+            ax=ax2
         )
-        fig.update_yaxes(
-            title_text="Objective θ Value", 
-            row=1, col=2,
-            showgrid=True,
-            gridcolor='lightgray',
-            showline=True,
-            linewidth=1,
-            linecolor='black'
-        )
+        ax2.set_title(f'Maximization Steps (Epoch {epoch+1})')
+        ax2.set_xlabel('Step')
+        ax2.set_ylabel('Objective θ Value')
         
     else:
-        # Create single plot for minimization only
-        fig = go.Figure()
-        
-        # Add min step objectives
-        fig.add_trace(
-            go.Scatter(y=epoch_min_objectives, 
-                      mode='lines', 
-                      name='Min steps',
-                      line=dict(color='green'))
+        # Create single plot
+        plt.figure(figsize=(8, 5))
+        sns.lineplot(
+            data=epoch_min_objectives,
+            color='green',
+            label='Min steps'
         )
-        
-        # Update axes for single plot
-        fig.update_xaxes(
-            title_text="Step",
-            showgrid=True,
-            gridcolor='lightgray',
-            showline=True,
-            linewidth=1,
-            linecolor='black'
-        )
-        fig.update_yaxes(
-            title_text="Objective T Value",
-            showgrid=True,
-            gridcolor='lightgray',
-            showline=True,
-            linewidth=1,
-            linecolor='black'
-        )
-
-    # Common layout updates
-    fig.update_layout(
-        height=400,
-        width=1000 if robust else 500,
-        showlegend=True,
-        title_text=f"Optimization Progress - Epoch {epoch+1}",
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        font=dict(size=12)
-    )
-
-    fig.show()
+        plt.title(f'Optimization Progress - Epoch {epoch+1}')
+        plt.xlabel('Step')
+        plt.ylabel('Objective T Value')
+    
+    plt.tight_layout()
+    plt.show()
 
 def plot_overall_progress(epoch_objectives, robust):
-    """Plot overall optimization progress"""
+    """Plot overall optimization progress using Seaborn"""
+    sns.set_style("whitegrid")
+    
     if robust:
-        # Create subplot with both objectives
-        fig = make_subplots(rows=2, cols=1,
-                           subplot_titles=('T Objective across Epochs', 
-                                         'θ Objective across Epochs'))
+        # Create figure with two subplots vertically stacked
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
         
         # Plot T objectives
-        fig.add_trace(
-            go.Scatter(y=epoch_objectives['T_objectives'], 
-                      mode='lines', 
-                      name='T objective',
-                      line=dict(color='green')),
-            row=1, col=1
+        sns.lineplot(
+            data=epoch_objectives['T_objectives'],
+            color='green',
+            label='T objective',
+            ax=ax1
         )
+        ax1.set_title('T Objective across Epochs')
+        ax1.set_xlabel('Epoch')
+        ax1.set_ylabel('T Objective Value')
         
         # Plot theta objectives
-        fig.add_trace(
-            go.Scatter(y=epoch_objectives['theta_objectives'], 
-                      mode='lines', 
-                      name='θ objective',
-                      line=dict(color='purple')),
-            row=2, col=1
+        sns.lineplot(
+            data=epoch_objectives['theta_objectives'],
+            color='purple',
+            label='θ objective',
+            ax=ax2
         )
+        ax2.set_title('θ Objective across Epochs')
+        ax2.set_xlabel('Epoch')
+        ax2.set_ylabel('θ Objective Value')
         
-        # Update both sets of axes
-        for row in [1, 2]:
-            fig.update_xaxes(
-                title_text="Epoch", 
-                row=row, col=1,
-                showgrid=True,
-                gridcolor='lightgray',
-                showline=True,
-                linewidth=1,
-                linecolor='black'
-            )
-            
-            title = "T Objective Value" if row == 1 else "θ Objective Value"
-            fig.update_yaxes(
-                title_text=title, 
-                row=row, col=1,
-                showgrid=True,
-                gridcolor='lightgray',
-                showline=True,
-                linewidth=1,
-                linecolor='black'
-            )
-            
     else:
-        # Create single plot for T objective only
-        fig = go.Figure()
-        
-        # Plot T objectives
-        fig.add_trace(
-            go.Scatter(y=epoch_objectives['T_objectives'], 
-                      mode='lines', 
-                      name='T objective',
-                      line=dict(color='green'))
+        # Create single plot
+        plt.figure(figsize=(8, 5))
+        sns.lineplot(
+            data=epoch_objectives['T_objectives'],
+            color='green',
+            label='T objective'
         )
-        
-        # Update axes for single plot
-        fig.update_xaxes(
-            title_text="Epoch",
-            showgrid=True,
-            gridcolor='lightgray',
-            showline=True,
-            linewidth=1,
-            linecolor='black'
-        )
-        fig.update_yaxes(
-            title_text="T Objective Value",
-            showgrid=True,
-            gridcolor='lightgray',
-            showline=True,
-            linewidth=1,
-            linecolor='black'
-        )
+        plt.title('Overall Optimization Progress')
+        plt.xlabel('Epoch')
+        plt.ylabel('T Objective Value')
+    
+    plt.tight_layout()
+    plt.show()
 
-    # Common layout updates
-    fig.update_layout(
-        height=800 if robust else 400,
-        width=1000 if robust else 500,
-        showlegend=True,
-        title_text="Overall Optimization Progress",
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        font=dict(size=12)
-    )
+# def plot_epoch_progress(epoch, epoch_min_objectives, epoch_max_objectives, robust):
+#     """Plot optimization progress for current epoch"""
+#     if robust:
+#         # Create subplot with both min and max
+#         fig = make_subplots(rows=1, cols=2, 
+#                            subplot_titles=(f'Minimization Steps (Epoch {epoch+1})', 
+#                                          f'Maximization Steps (Epoch {epoch+1})'))
+        
+#         # Add min step objectives
+#         fig.add_trace(
+#             go.Scatter(y=epoch_min_objectives, 
+#                       mode='lines', 
+#                       name='Min steps',
+#                       line=dict(color='green')),
+#             row=1, col=1
+#         )
 
-    fig.show()
+#         # Add max step objectives
+#         fig.add_trace(
+#             go.Scatter(y=epoch_max_objectives, 
+#                       mode='lines', 
+#                       name='Max steps',
+#                       line=dict(color='purple')),
+#             row=1, col=2
+#         )
+        
+#         # Update both axes
+#         for row, col in [(1,1), (1,2)]:
+#             fig.update_xaxes(
+#                 title_text="Step", 
+#                 row=row, col=col,
+#                 showgrid=True,
+#                 gridcolor='lightgray',
+#                 showline=True,
+#                 linewidth=1,
+#                 linecolor='black'
+#             )
+        
+#         fig.update_yaxes(
+#             title_text="Objective T Value", 
+#             row=1, col=1,
+#             showgrid=True,
+#             gridcolor='lightgray',
+#             showline=True,
+#             linewidth=1,
+#             linecolor='black'
+#         )
+#         fig.update_yaxes(
+#             title_text="Objective θ Value", 
+#             row=1, col=2,
+#             showgrid=True,
+#             gridcolor='lightgray',
+#             showline=True,
+#             linewidth=1,
+#             linecolor='black'
+#         )
+        
+#     else:
+#         # Create single plot for minimization only
+#         fig = go.Figure()
+        
+#         # Add min step objectives
+#         fig.add_trace(
+#             go.Scatter(y=epoch_min_objectives, 
+#                       mode='lines', 
+#                       name='Min steps',
+#                       line=dict(color='green'))
+#         )
+        
+#         # Update axes for single plot
+#         fig.update_xaxes(
+#             title_text="Step",
+#             showgrid=True,
+#             gridcolor='lightgray',
+#             showline=True,
+#             linewidth=1,
+#             linecolor='black'
+#         )
+#         fig.update_yaxes(
+#             title_text="Objective T Value",
+#             showgrid=True,
+#             gridcolor='lightgray',
+#             showline=True,
+#             linewidth=1,
+#             linecolor='black'
+#         )
+
+#     # Common layout updates
+#     fig.update_layout(
+#         height=400,
+#         width=1000 if robust else 500,
+#         showlegend=True,
+#         title_text=f"Optimization Progress - Epoch {epoch+1}",
+#         plot_bgcolor='white',
+#         paper_bgcolor='white',
+#         font=dict(size=12)
+#     )
+
+#     fig.show()
+
+# def plot_overall_progress(epoch_objectives, robust):
+#     """Plot overall optimization progress"""
+#     if robust:
+#         # Create subplot with both objectives
+#         fig = make_subplots(rows=2, cols=1,
+#                            subplot_titles=('T Objective across Epochs', 
+#                                          'θ Objective across Epochs'))
+        
+#         # Plot T objectives
+#         fig.add_trace(
+#             go.Scatter(y=epoch_objectives['T_objectives'], 
+#                       mode='lines', 
+#                       name='T objective',
+#                       line=dict(color='green')),
+#             row=1, col=1
+#         )
+        
+#         # Plot theta objectives
+#         fig.add_trace(
+#             go.Scatter(y=epoch_objectives['theta_objectives'], 
+#                       mode='lines', 
+#                       name='θ objective',
+#                       line=dict(color='purple')),
+#             row=2, col=1
+#         )
+        
+#         # Update both sets of axes
+#         for row in [1, 2]:
+#             fig.update_xaxes(
+#                 title_text="Epoch", 
+#                 row=row, col=1,
+#                 showgrid=True,
+#                 gridcolor='lightgray',
+#                 showline=True,
+#                 linewidth=1,
+#                 linecolor='black'
+#             )
+            
+#             title = "T Objective Value" if row == 1 else "θ Objective Value"
+#             fig.update_yaxes(
+#                 title_text=title, 
+#                 row=row, col=1,
+#                 showgrid=True,
+#                 gridcolor='lightgray',
+#                 showline=True,
+#                 linewidth=1,
+#                 linecolor='black'
+#             )
+            
+#     else:
+#         # Create single plot for T objective only
+#         fig = go.Figure()
+        
+#         # Plot T objectives
+#         fig.add_trace(
+#             go.Scatter(y=epoch_objectives['T_objectives'], 
+#                       mode='lines', 
+#                       name='T objective',
+#                       line=dict(color='green'))
+#         )
+        
+#         # Update axes for single plot
+#         fig.update_xaxes(
+#             title_text="Epoch",
+#             showgrid=True,
+#             gridcolor='lightgray',
+#             showline=True,
+#             linewidth=1,
+#             linecolor='black'
+#         )
+#         fig.update_yaxes(
+#             title_text="T Objective Value",
+#             showgrid=True,
+#             gridcolor='lightgray',
+#             showline=True,
+#             linewidth=1,
+#             linecolor='black'
+#         )
+
+#     # Common layout updates
+#     fig.update_layout(
+#         height=800 if robust else 400,
+#         width=1000 if robust else 500,
+#         showlegend=True,
+#         title_text="Overall Optimization Progress",
+#         plot_bgcolor='white',
+#         paper_bgcolor='white',
+#         font=dict(size=12)
+#     )
+
+#     fig.show()
 
 def print_results(T, paramsL, paramsH, elapsed_time):
     print("\n" + "="*50)
