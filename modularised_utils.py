@@ -895,7 +895,7 @@ def get_mle_coefficients_gmm(data_list, G, weights=None, n_components=2):
     return coeffs
 
 
-######################## LOADERS ########################
+############################# LOADERS #############################
 def load_model(experiment, model):
     if model == 'LL':
         return joblib.load(f'data/{experiment}/LL.pkl')
