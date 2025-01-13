@@ -5,7 +5,7 @@ import torch
 from sklearn.mixture import GaussianMixture
 from scipy.linalg import sqrtm
 import seaborn as sns
-
+import modularised_utils as mut
 
 def contaminate_linear_relationships(data, contamination_fraction=0.3, contamination_type='multiplicative'):
     """
@@ -215,3 +215,68 @@ def plot_distribution_changes(original, modified, title="Distribution Changes"):
     
     plt.tight_layout()
     plt.show()
+
+def add_random_noise(data, noise_type, level, experiment, normalize):
+   
+    n_samples, n_vars = data.shape
+    
+    if noise_type in ['gelbrich_gaussian', 'boundary_gaussian']:
+
+        params = mut.load_type_to_params(experiment, noise_type, level)
+
+       #params = type_to_params[noise_type][level]
+                
+    if noise_type == 'gelbrich_gaussian':
+
+        mu_U_hat    = params['mu_U'] #+ np.ones(params_Lerica['mu_U'].shape[0])
+        Sigma_U_hat = params['Sigma_U'] #+ np.random.normal(0, 0.1, size=params_Lerica['Sigma_U'].shape)
+        radius      = params['radius']
+
+        # Sample moments from Gelbrich ball
+        moments = mut.sample_moments_U(
+                                        mu_hat=mu_U_hat, 
+                                        Sigma_hat=Sigma_U_hat, 
+                                        bound=radius, 
+                                        num_envs=1
+                                        )
+        
+        noise_mu, noise_Sigma = moments[0]
+
+        noise = np.random.multivariate_normal(
+                                                mean=noise_mu, 
+                                                cov=noise_Sigma, 
+                                                size=n_samples
+                                                )
+
+    elif noise_type == 'boundary_gaussian':
+        noise_mu, noise_Sigma = params['mu_U'], params['Sigma_U']
+
+        noise = np.random.multivariate_normal(
+                                                mean=noise_mu, 
+                                                cov=noise_Sigma, 
+                                                size=n_samples
+                                                )
+    
+    # Generate noise based on type
+    elif noise_type == 'uniform':
+        noise = np.random.uniform(low=-1, high=1, size=(n_samples, n_vars))
+    
+    elif noise_type == 'exponential':
+        noise = np.random.exponential(scale=4.0, size=(n_samples, n_vars))
+        noise = noise - 1  # Center to mean 0
+    
+    elif noise_type == 'laplace':
+        noise = np.random.laplace(loc=0.5, scale=2.0, size=(n_samples, n_vars))
+    
+    elif noise_type == 'chi_square':
+        noise = np.random.chisquare(df=1, size=(n_samples, n_vars))
+        noise = noise - 1  # Center to mean 0
+    
+    else:
+        raise ValueError(f"Unknown noise type: {noise_type}")
+    
+    # Normalize noise to have similar scale
+    if normalize == True:
+        noise = noise / np.std(noise, axis=0)
+    
+    return data + noise

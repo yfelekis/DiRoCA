@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 from src.CBN import CausalBayesianNetwork as CBN
 import operations as ops
-
+import modularised_utils as mut
 def monge_map(m_alpha, Sigma_alpha, m_beta, Sigma_beta):
     """
     Compute the Monge map between two multivariate Gaussians and return the transformation
@@ -163,44 +163,66 @@ def sqrtm_eig(A):
     
     return sqrt_A
 
+def constraints_error_check(satisfied_L, d_L, e, satisfied_H, d_H, d):
+    if not satisfied_L:
+        print(f"Warning: Constraints not satisfied for mu_L and Sigma_L! Distance: {d_L} and epsilon = {e}")
 
-def plot_epoch_progress(epoch, epoch_min_objectives, epoch_max_objectives, robust):
-    """Plot optimization progress for current epoch using Seaborn"""
+    if not satisfied_H:
+        print(f"Warning: Constraints not satisfied for mu_H and Sigma_H! Distance: {d_H} and delta = {d}")
+
+    return
+
+def plot_inner_loop_objectives(inner_loop_objectives, epoch, erica=True):
+    """
+    Plot objectives from the inner loop optimization steps for a given epoch.
+    
+    Args:
+        inner_loop_objectives: Dictionary containing 'min_objectives' and optionally 'max_objectives'
+        epoch: Current epoch number
+        erica: Boolean indicating if both min and max objectives should be plotted
+    """
     sns.set_style("whitegrid")
     
-    if robust:
+    inner_loop_objectives['min_objectives'] = np.array([t.detach().numpy() for t in inner_loop_objectives['min_objectives']])
+    inner_loop_objectives['max_objectives'] = np.array([t.detach().numpy() for t in inner_loop_objectives['max_objectives']])
+    
+    plt.figure(figsize=(10, 6))
+    if erica:
         # Create figure with two subplots
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
         
-        # Plot min step objectives
+        # Plot minimization objectives
+        steps = range(1, len(inner_loop_objectives['min_objectives']) + 1)
         sns.lineplot(
-            data=epoch_min_objectives,
+            x=steps,
+            y=inner_loop_objectives['min_objectives'],
             color='green',
-            label='Min steps',
             ax=ax1
         )
         ax1.set_title(f'Minimization Steps (Epoch {epoch+1})')
         ax1.set_xlabel('Step')
         ax1.set_ylabel('Objective T Value')
         
-        # Plot max step objectives
-        sns.lineplot(
-            data=epoch_max_objectives,
-            color='purple',
-            label='Max steps',
-            ax=ax2
-        )
-        ax2.set_title(f'Maximization Steps (Epoch {epoch+1})')
-        ax2.set_xlabel('Step')
-        ax2.set_ylabel('Objective θ Value')
-        
+        # Plot maximization objectives
+        if 'max_objectives' in inner_loop_objectives:
+            steps_max = range(1, len(inner_loop_objectives['max_objectives']) + 1)
+            sns.lineplot(
+                x=steps_max,
+                y=inner_loop_objectives['max_objectives'],
+                color='purple',
+                ax=ax2
+            )
+            ax2.set_title(f'Maximization Steps (Epoch {epoch+1})')
+            ax2.set_xlabel('Step')
+            ax2.set_ylabel('Objective θ Value')
     else:
-        # Create single plot
+        # Single plot for minimization only
         plt.figure(figsize=(8, 5))
+        steps = range(1, len(inner_loop_objectives['min_objectives']) + 1)
         sns.lineplot(
-            data=epoch_min_objectives,
-            color='green',
-            label='Min steps'
+            x=steps,
+            y=inner_loop_objectives['min_objectives'],
+            color='green'
         )
         plt.title(f'Optimization Progress - Epoch {epoch+1}')
         plt.xlabel('Step')
@@ -209,19 +231,29 @@ def plot_epoch_progress(epoch, epoch_min_objectives, epoch_max_objectives, robus
     plt.tight_layout()
     plt.show()
 
-def plot_overall_progress(epoch_objectives, robust):
-    """Plot overall optimization progress using Seaborn"""
+def plot_epoch_objectives(epoch_objectives, erica=True):
+    """
+    Plot overall optimization progress across epochs.
+    
+    Args:
+        epoch_objectives: Dictionary containing 'T_objectives_overall' and optionally 'theta_objectives_overall'
+        erica: Boolean indicating if both T and theta objectives should be plotted
+    """
     sns.set_style("whitegrid")
     
-    if robust:
+    epoch_objectives['T_objectives_overall'] = np.array([t.detach().numpy() for t in epoch_objectives['T_objectives_overall']])
+    epoch_objectives['theta_objectives_overall'] = np.array([t.detach().numpy() for t in epoch_objectives['theta_objectives_overall']])
+
+    if erica:
         # Create figure with two subplots vertically stacked
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
         
         # Plot T objectives
+        epochs = range(1, len(epoch_objectives['T_objectives_overall']) + 1)
         sns.lineplot(
-            data=epoch_objectives['T_objectives'],
+            x=epochs,
+            y=epoch_objectives['T_objectives_overall'],
             color='green',
-            label='T objective',
             ax=ax1
         )
         ax1.set_title('T Objective across Epochs')
@@ -229,23 +261,24 @@ def plot_overall_progress(epoch_objectives, robust):
         ax1.set_ylabel('T Objective Value')
         
         # Plot theta objectives
-        sns.lineplot(
-            data=epoch_objectives['theta_objectives'],
-            color='purple',
-            label='θ objective',
-            ax=ax2
-        )
-        ax2.set_title('θ Objective across Epochs')
-        ax2.set_xlabel('Epoch')
-        ax2.set_ylabel('θ Objective Value')
-        
+        if 'theta_objectives_overall' in epoch_objectives:
+            sns.lineplot(
+                x=epochs,
+                y=epoch_objectives['theta_objectives_overall'],
+                color='purple',
+                ax=ax2
+            )
+            ax2.set_title('θ Objective across Epochs')
+            ax2.set_xlabel('Epoch')
+            ax2.set_ylabel('θ Objective Value')
     else:
-        # Create single plot
+        # Single plot for T objectives only
         plt.figure(figsize=(8, 5))
+        epochs = range(1, len(epoch_objectives['T_objectives_overall']) + 1)
         sns.lineplot(
-            data=epoch_objectives['T_objectives'],
-            color='green',
-            label='T objective'
+            x=epochs,
+            y=epoch_objectives['T_objectives_overall'],
+            color='green'
         )
         plt.title('Overall Optimization Progress')
         plt.xlabel('Epoch')
@@ -345,7 +378,7 @@ def condition_number(matrix):
 
     return cond_number
 
-def compute_objective_value(T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H):
+def compute_objective_value_old(T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H):
     """
     Compute the terms of the Wasserstein objective function.
     
@@ -380,12 +413,94 @@ def compute_objective_value(T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H):
 
     H_Sigma_HH   = regmat(H_i @ Sigma_H @ H_i.T)
     term3        = torch.trace(H_Sigma_HH)
-    
-    L_i_Sigma_L  = regmat(T @ L_i @ Sigma_L @ L_i.T @ T.T)
-    H_i_Sigma_H  = regmat(H_i @ Sigma_H @ H_i.T)
 
-    term4       = -2 * torch.trace(sqrtm_svd(sqrtm_svd(L_i_Sigma_L) @ H_i_Sigma_H @ sqrtm_svd(L_i_Sigma_L)))
+    term4       = -2 * torch.trace(sqrtm_svd(sqrtm_svd(TL_Sigma_LLT) @ H_Sigma_HH @ sqrtm_svd(TL_Sigma_LLT)))
     
     val         = term1 + term2 + term3 + term4
 
     return val
+
+def compute_objective_value(T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H, 
+                            lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H, epsilon, delta):
+    """
+    Compute the terms of the Wasserstein objective function, including regularization terms.
+    
+    Args:
+        T: Transformation matrix
+        L_i: Low-level structural matrix
+        H_i: High-level structural matrix
+        mu_L: Low-level mean
+        mu_H: High-level mean
+        Sigma_L: Low-level covariance
+        Sigma_H: High-level covariance
+        lambda_L: Regularization parameter for low-level variables
+        lambda_H: Regularization parameter for high-level variables
+        hat_mu_L: Target low-level mean
+        hat_mu_H: Target high-level mean
+        hat_Sigma_L: Target low-level covariance
+        hat_Sigma_H: Target high-level covariance
+        epsilon: Radius for low-level Gelbrich constraint
+        delta: Radius for high-level Gelbrich constraint
+        
+    Returns:
+        val: Value of the objective function
+    """
+
+    # Convert all inputs to float32 (torch.float)
+    T = T.float()
+    L_i = L_i.float()
+    H_i = H_i.float()
+    mu_L = mu_L.float()
+    mu_H = mu_H.float()
+    Sigma_L = Sigma_L.float()
+    Sigma_H = Sigma_H.float()
+    hat_mu_L = hat_mu_L.float()
+    hat_mu_H = hat_mu_H.float()
+    hat_Sigma_L = hat_Sigma_L.float()
+    hat_Sigma_H = hat_Sigma_H.float()
+
+    # Smooth term components
+    L_i_mu_L     = L_i @ mu_L
+    H_i_mu_H     = H_i @ mu_H
+    term1        = torch.norm(T @ L_i_mu_L - H_i_mu_H) ** 2
+    
+    TL_Sigma_LLT = regmat(T @ L_i @ Sigma_L @ L_i.T @ T.T)
+    term2        = torch.trace(TL_Sigma_LLT)
+
+    H_Sigma_HH   = regmat(H_i @ Sigma_H @ H_i.T)
+    term3        = torch.trace(H_Sigma_HH)
+    
+    term4        = -2 * torch.trace(sqrtm_svd(sqrtm_svd(TL_Sigma_LLT) @ H_Sigma_HH @ sqrtm_svd(TL_Sigma_LLT)))
+
+    # Regularization terms
+    Sigma_L_sqrt     = sqrtm_svd(Sigma_L)
+    hat_Sigma_L_sqrt = sqrtm_svd(hat_Sigma_L)
+    Sigma_H_sqrt     = sqrtm_svd(Sigma_H)
+    hat_Sigma_H_sqrt = sqrtm_svd(hat_Sigma_H)
+
+    reg_L    = lambda_L * (epsilon**2 - torch.norm(mu_L - hat_mu_L) ** 2 - torch.norm(Sigma_L_sqrt - hat_Sigma_L_sqrt, p='fro') ** 2)
+    reg_H    = lambda_H * (delta**2 - torch.norm(mu_H - hat_mu_H) ** 2 - torch.norm(Sigma_H_sqrt - hat_Sigma_H_sqrt, p='fro') ** 2)
+
+    # Total value
+    val = term1 + term2 + term3 + term4 + reg_L + reg_H
+
+    return val
+
+def get_initialization(theta_hatL, theta_hatH, epsilon, delta, initial_theta):
+    hat_mu_L, hat_Sigma_L = torch.from_numpy(theta_hatL['mu_U']).float(), torch.from_numpy(theta_hatL['Sigma_U']).float()
+    hat_mu_H, hat_Sigma_H = torch.from_numpy(theta_hatH['mu_U']).float(), torch.from_numpy(theta_hatH['Sigma_U']).float()
+
+    if initial_theta == 'gelbrich':
+        ll_moments    = mut.sample_moments_U(mu_hat = theta_hatL['mu_U'], Sigma_hat = theta_hatL['Sigma_U'], bound = epsilon, num_envs = 1)
+        mu_L, Sigma_L = ll_moments[0]
+        mu_L, Sigma_L = torch.from_numpy(mu_L).float(), torch.from_numpy(Sigma_L).float()
+
+        hl_moments      = mut.sample_moments_U(mu_hat = theta_hatH['mu_U'], Sigma_hat = theta_hatH['Sigma_U'], bound = delta, num_envs = 1)
+        mu_H, Sigma_H = hl_moments[0]
+        mu_H, Sigma_H = torch.from_numpy(mu_H).float(), torch.from_numpy(Sigma_H).float()
+
+    elif initial_theta == 'empirical':
+        mu_L, Sigma_L = hat_mu_L, hat_Sigma_L
+        mu_H, Sigma_H = hat_mu_H, hat_Sigma_H
+
+    return mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H

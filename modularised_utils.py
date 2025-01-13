@@ -478,6 +478,60 @@ def generate_perturbed_datasets(D, bound, num_envs=1, p=2):
     
     return D_perturbed_list #, Theta_list
 
+def get_coefficients(data_list, G, weights=None, use_ridge=False, alpha=1.0):
+    """
+    Estimate structural coefficients for a linear SCM using observational data.
+    
+    Args:
+        data_list: List of datasets or single dataset (n_samples, n_variables)
+        G: NetworkX DiGraph representing causal structure
+        weights: Optional weights for different datasets
+        use_ridge: Whether to use Ridge regression (default: False)
+        alpha: Ridge regression parameter (default: 1.0)
+    
+    Returns:
+        dict: Edge coefficients {(parent, child): coefficient}
+    """
+    # Input validation
+    if not nx.is_directed_acyclic_graph(G):
+        raise ValueError("Graph must be a DAG")
+    
+    # Convert single dataset to list
+    if isinstance(data_list, np.ndarray):
+        data_list = [data_list]
+        
+    # Setup weights
+    if weights is None:
+        weights = [1.0] * len(data_list)
+    
+    # Combine datasets and weights
+    data = np.vstack(data_list)
+    sample_weights = np.repeat(weights, [d.shape[0] for d in data_list])
+    sample_weights = sample_weights / sample_weights.sum()
+    
+    # Get node ordering
+    nodes = list(G.nodes)
+    coeffs = {}
+    
+    # Estimate coefficients for each node
+    for node in nx.topological_sort(G):
+        parents = list(G.predecessors(node))
+        if not parents:
+            continue
+            
+        # Prepare regression data
+        y = data[:, nodes.index(node)]
+        X = data[:, [nodes.index(p) for p in parents]]
+        
+        # Fit regression
+        model = Ridge(alpha=alpha) if use_ridge else LinearRegression()
+        model.fit(X, y, sample_weight=sample_weights)
+        
+        # Store coefficients
+        for parent, coef in zip(parents, model.coef_):
+            coeffs[(parent, node)] = coef
+            
+    return coeffs
 
 # ######################## KEEP THIS! ########################
 # def get_coefficients(data, G):
@@ -512,124 +566,150 @@ def generate_perturbed_datasets(D, bound, num_envs=1, p=2):
 #     return coeffs
 # ######################## KEEP THIS! ########################
 
-def get_coefficients(data_list, G, weights=None, use_ridge=False, alpha=1.0):
-    """
-    Estimates the structural coefficients for the edges in the causal model
-    using observational datasets, given the causal graph.
+# def get_coefficients(data_list, G, weights=None, use_ridge=False, alpha=1.0):
+#     """
+#     Estimates the structural coefficients for the edges in the causal model
+#     using observational datasets, given the causal graph.
     
-    Args:
-    - data_list (list of ndarray): List of n x k datasets (n samples, k variables).
-    - G (DiGraph): The underlying DAG of the causal model.
-    - weights (list of float): List of weights for each dataset (optional).
-    - use_ridge (bool): Whether to use Ridge regression for better stability.
-    - alpha (float): Regularization strength for Ridge regression.
+#     Args:
+#     - data_list (list of ndarray): List of n x k datasets (n samples, k variables).
+#     - G (DiGraph): The underlying DAG of the causal model.
+#     - weights (list of float): List of weights for each dataset (optional).
+#     - use_ridge (bool): Whether to use Ridge regression for better stability.
+#     - alpha (float): Regularization strength for Ridge regression.
     
-    Returns:
-    - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
-    """
-    # Ensure graph is a DAG
-    if not nx.is_directed_acyclic_graph(G):
-        raise ValueError("The provided graph is not a valid DAG!")
+#     Returns:
+#     - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
+#     """
+#     # Ensure graph is a DAG
+#     if not nx.is_directed_acyclic_graph(G):
+#         raise ValueError("The provided graph is not a valid DAG!")
 
+#     nodes = list(G.nodes)
+#     coeffs = {}
+
+#     # Convert a single dataset to a list for consistency
+#     if isinstance(data_list, np.ndarray):
+#         data_list = [data_list]
+
+#     # Default weights to 1 if not provided
+#     if weights is None:
+#         weights = [1] * len(data_list)
+
+#     # Combine datasets and weights
+#     combined_data = []
+#     sample_weights = []
+
+#     for data, weight in zip(data_list, weights):
+#         num_samples = data.shape[0]
+#         combined_data.append(data)
+#         sample_weights.extend([weight] * num_samples)
+
+#     # Stack all datasets into one array
+#     combined_data = np.vstack(combined_data)
+#     sample_weights = np.array(sample_weights)
+
+#     # Normalize sample weights
+#     # Normalize sample weights
+#     sample_weights = np.array(sample_weights, dtype=np.float64)  # Ensure float type
+#     sample_weights /= np.sum(sample_weights)
+#     # Estimate coefficients for each edge
+#     for node in nx.topological_sort(G):
+#         node_idx = nodes.index(node)
+#         parents = list(G.predecessors(node))
+        
+#         if parents:
+#             parent_indices = [nodes.index(p) for p in parents]
+#             X_parents = combined_data[:, parent_indices]  # Features (parents)
+#             y = combined_data[:, node_idx]  # Target (child)
+            
+#             # Choose regression model
+#             if use_ridge:
+#                 reg = Ridge(alpha=alpha)
+#             else:
+#                 reg = LinearRegression()
+            
+#             # Fit the model with sample weights
+#             reg.fit(X_parents, y, sample_weight=sample_weights)
+            
+#             for p, coef in zip(parents, reg.coef_):
+#                 coeffs[(p, node)] = coef  # Store coefficient as (parent, child)
+
+#     return coeffs
+def lan_abduction(data, G, coeffs):
+    
+    n_samples, n_vars = data.shape
+    noise = np.zeros((n_samples, n_vars))
     nodes = list(G.nodes)
-    coeffs = {}
-
-    # Convert a single dataset to a list for consistency
-    if isinstance(data_list, np.ndarray):
-        data_list = [data_list]
-
-    # Default weights to 1 if not provided
-    if weights is None:
-        weights = [1] * len(data_list)
-
-    # Combine datasets and weights
-    combined_data = []
-    sample_weights = []
-
-    for data, weight in zip(data_list, weights):
-        num_samples = data.shape[0]
-        combined_data.append(data)
-        sample_weights.extend([weight] * num_samples)
-
-    # Stack all datasets into one array
-    combined_data = np.vstack(combined_data)
-    sample_weights = np.array(sample_weights)
-
-    # Normalize sample weights
-    # Normalize sample weights
-    sample_weights = np.array(sample_weights, dtype=np.float64)  # Ensure float type
-    sample_weights /= np.sum(sample_weights)
-    # Estimate coefficients for each edge
+    
+    # For each variable in topological order
     for node in nx.topological_sort(G):
-        node_idx = nodes.index(node)
+        idx = nodes.index(node)
         parents = list(G.predecessors(node))
         
-        if parents:
-            parent_indices = [nodes.index(p) for p in parents]
-            X_parents = combined_data[:, parent_indices]  # Features (parents)
-            y = combined_data[:, node_idx]  # Target (child)
-            
-            # Choose regression model
-            if use_ridge:
-                reg = Ridge(alpha=alpha)
-            else:
-                reg = LinearRegression()
-            
-            # Fit the model with sample weights
-            reg.fit(X_parents, y, sample_weight=sample_weights)
-            
-            for p, coef in zip(parents, reg.coef_):
-                coeffs[(p, node)] = coef  # Store coefficient as (parent, child)
-
-    return coeffs
-
-
-def lan_abduction(data, G, coeffs):
-    """
-    Computes the exogenous variables for a linear additive Gaussian noise SCM using the coefficients.
-    
-    Args:
-    - data (ndarray)  : n x k dataset where n is the number of samples and k is the number of variables.
-    - G (DiGraph)     : The underlying DAG of the causal model.
-    - coeffs (dict)   : Dictionary of estimated structural coefficients for each edge.
-    
-    Returns:
-    - U (ndarray)     : n x k dataset of the exogenous variables (residuals).
-    - mean_U (ndarray): Mean vector of the exogenous variables.
-    - cov_U (ndarray) : Covariance matrix of the exogenous variables.
-    """
-    
-    # Initialize residual matrix (exogenous variables)
-    n_samples, n_vars = data.shape
-    U                 = np.zeros((n_samples, n_vars))
-    nodes             = list(G.nodes)
-    
-    for node in nx.topological_sort(G):
-        node_idx = nodes.index(node)
-        parents  = list(G.predecessors(node))
-        
         if not parents:
-            # If there are no parents, this is an exogenous node
-            U[:, node_idx] = data[:, node_idx]  # U_node = X_node (no parents)
+            # No parents -> observed value is the noise
+            noise[:, idx] = data[:, idx]
         else:
-            X_parents = np.zeros((n_samples, len(parents)))
-            for i, p in enumerate(parents):
-                # Fill the values based on the coefficients
-                X_parents[:, i] = data[:, nodes.index(p)] * coeffs[(p, node)]
+            # Compute predicted value from parents
+            predicted = sum(data[:, nodes.index(p)] * coeffs[(p, node)] 
+                          for p in parents)
+            # Noise is observed minus predicted
+            noise[:, idx] = data[:, idx] - predicted
+    
+    # Compute statistics
+    mean = np.mean(noise, axis=0)
+    var = np.var(noise, axis=0)
+    cov = np.diag(var)  # Assuming independent noise
+    
+    return noise, mean, cov
+
+# def lan_abduction(data, G, coeffs):
+#     """
+#     Computes the exogenous variables for a linear additive Gaussian noise SCM using the coefficients.
+    
+#     Args:
+#     - data (ndarray)  : n x k dataset where n is the number of samples and k is the number of variables.
+#     - G (DiGraph)     : The underlying DAG of the causal model.
+#     - coeffs (dict)   : Dictionary of estimated structural coefficients for each edge.
+    
+#     Returns:
+#     - U (ndarray)     : n x k dataset of the exogenous variables (residuals).
+#     - mean_U (ndarray): Mean vector of the exogenous variables.
+#     - cov_U (ndarray) : Covariance matrix of the exogenous variables.
+#     """
+    
+#     # Initialize residual matrix (exogenous variables)
+#     n_samples, n_vars = data.shape
+#     U                 = np.zeros((n_samples, n_vars))
+#     nodes             = list(G.nodes)
+    
+#     for node in nx.topological_sort(G):
+#         node_idx = nodes.index(node)
+#         parents  = list(G.predecessors(node))
+        
+#         if not parents:
+#             # If there are no parents, this is an exogenous node
+#             U[:, node_idx] = data[:, node_idx]  # U_node = X_node (no parents)
+#         else:
+#             X_parents = np.zeros((n_samples, len(parents)))
+#             for i, p in enumerate(parents):
+#                 # Fill the values based on the coefficients
+#                 X_parents[:, i] = data[:, nodes.index(p)] * coeffs[(p, node)]
                 
-            # Calculate the residuals (exogenous noise)
-            y = data[:, node_idx]
-            U[:, node_idx] = y - X_parents.sum(axis=1)  # Residuals are the exogenous noise
+#             # Calculate the residuals (exogenous noise)
+#             y = data[:, node_idx]
+#             U[:, node_idx] = y - X_parents.sum(axis=1)  # Residuals are the exogenous noise
 
-    # Estimate the mean and covariance of the exogenous variables
-    mean_U = np.mean(U, axis=0)
-    #cov_U  = np.cov(U, rowvar=False)
-    # Enforce diagonal positive definite covariance matrix
-    cov_U_diag = np.var(U, axis=0)  # Variance of each exogenous variable
-    cov_U_diag = np.clip(cov_U_diag, a_min=1e-6, a_max=None)  # Ensure no negative or near-zero variances
-    cov_U = np.diag(cov_U_diag)  # Construct diagonal covariance matrix
+#     # Estimate the mean and covariance of the exogenous variables
+#     mean_U = np.mean(U, axis=0)
+#     #cov_U  = np.cov(U, rowvar=False)
+#     # Enforce diagonal positive definite covariance matrix
+#     cov_U_diag = np.var(U, axis=0)  # Variance of each exogenous variable
+#     cov_U_diag = np.clip(cov_U_diag, a_min=1e-6, a_max=None)  # Ensure no negative or near-zero variances
+#     cov_U = np.diag(cov_U_diag)  # Construct diagonal covariance matrix
 
-    return U, mean_U, cov_U
+#     return U, mean_U, cov_U
 
 def weighted_likelihood(params, X_parents, y, weights, beta=1.5, sigma=1.0):
     """
