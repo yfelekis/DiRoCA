@@ -664,6 +664,51 @@ def lan_abduction(data, G, coeffs):
     
     return noise, mean, cov
 
+def estimate_shape_parameter(noise, loc, scale, initial_beta=2.0):
+    """
+    Estimate the shape parameter beta using MLE.
+    """
+    def neg_log_likelihood(beta):
+        total_ll = 0
+        for dim in range(noise.shape[1]):
+            z = np.abs(noise[:, dim] - loc[dim]) / scale[dim]
+            total_ll += np.sum(z**beta)
+        return total_ll
+    
+    # Optimize to find beta (shape parameter)
+    result = minimize(neg_log_likelihood, x0=initial_beta, 
+                     bounds=[(0.1, 10.0)],  # Reasonable bounds for beta
+                     method='L-BFGS-B')
+    
+    return result.x[0]
+
+def lan_abduction_laplace(data, G, coeffs):
+    n_samples, n_vars = data.shape
+    noise = np.zeros((n_samples, n_vars))
+    nodes = list(G.nodes)
+    
+    # Calculate residuals same as before
+    for node in nx.topological_sort(G):
+        idx = nodes.index(node)
+        parents = list(G.predecessors(node))
+        
+        if not parents:
+            noise[:, idx] = data[:, idx]
+        else:
+            predicted = sum(data[:, nodes.index(p)] * coeffs[(p, node)] 
+                          for p in parents)
+            noise[:, idx] = data[:, idx] - predicted
+    
+    # Estimate parameters for Multivariate Laplace
+    loc = np.median(noise, axis=0)  # More robust than mean for Laplace
+    
+    # Scale parameter for Laplace using MAD
+    # For Laplace, scale = MAD/ln(2)
+    scale = np.median(np.abs(noise - loc), axis=0) / np.log(2)
+    #shape = estimate_shape_parameter(noise, loc, scale)
+
+    return noise, loc, scale
+
 # def lan_abduction(data, G, coeffs):
 #     """
 #     Computes the exogenous variables for a linear additive Gaussian noise SCM using the coefficients.

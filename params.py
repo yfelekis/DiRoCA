@@ -7,7 +7,7 @@ experiments = {
               }
 
 n_envs      = {
-                'synth1': [3, 2],
+                'synth1': [3, 3],
                 'synth1_gnd': [3, 2],
                 'little_lucas': [2, 2]
               }
@@ -15,7 +15,7 @@ n_envs      = {
 n_samples   = {
                 'synth1': [100000, 100000],
                 'synth1_gnd': [100000, 100000],
-                'little_lucas': [1000000, 1000000]
+                'little_lucas': [100000, 100000]
               }
 
 radius      = {

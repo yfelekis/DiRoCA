@@ -478,17 +478,20 @@ def compute_objective_value(T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H,
     Sigma_H_sqrt     = sqrtm_svd(Sigma_H)
     hat_Sigma_H_sqrt = sqrtm_svd(hat_Sigma_H)
 
-    reg_L    = lambda_L * (epsilon**2 - torch.norm(mu_L - hat_mu_L) ** 2 - torch.norm(Sigma_L_sqrt - hat_Sigma_L_sqrt, p='fro') ** 2)
-    reg_H    = lambda_H * (delta**2 - torch.norm(mu_H - hat_mu_H) ** 2 - torch.norm(Sigma_H_sqrt - hat_Sigma_H_sqrt, p='fro') ** 2)
+    reg_L    = lambda_L * (torch.norm(mu_L - hat_mu_L) ** 2 + torch.norm(Sigma_L_sqrt - hat_Sigma_L_sqrt, p='fro') ** 2 - epsilon**2)
+    reg_H    = lambda_H * (torch.norm(mu_H - hat_mu_H) ** 2 + torch.norm(Sigma_H_sqrt - hat_Sigma_H_sqrt, p='fro') ** 2 - delta**2)
 
+    #penalty_term = (reg_L - epsilon**2)**2 + (reg_H - delta**2)**2
     # Total value
-    val = term1 + term2 + term3 + term4 + reg_L + reg_H
+    val = term1 + term2 + term3 + term4 + reg_L + reg_H #+ penalty_term
 
     return val
 
 def get_initialization(theta_hatL, theta_hatH, epsilon, delta, initial_theta):
     hat_mu_L, hat_Sigma_L = torch.from_numpy(theta_hatL['mu_U']).float(), torch.from_numpy(theta_hatL['Sigma_U']).float()
     hat_mu_H, hat_Sigma_H = torch.from_numpy(theta_hatH['mu_U']).float(), torch.from_numpy(theta_hatH['Sigma_U']).float()
+
+    l, h = hat_mu_L.shape[0], hat_mu_H.shape[0]
 
     if initial_theta == 'gelbrich':
         ll_moments    = mut.sample_moments_U(mu_hat = theta_hatL['mu_U'], Sigma_hat = theta_hatL['Sigma_U'], bound = epsilon, num_envs = 1)
@@ -502,5 +505,15 @@ def get_initialization(theta_hatL, theta_hatH, epsilon, delta, initial_theta):
     elif initial_theta == 'empirical':
         mu_L, Sigma_L = hat_mu_L, hat_Sigma_L
         mu_H, Sigma_H = hat_mu_H, hat_Sigma_H
+
+    elif initial_theta == 'random':
+        mu_L, Sigma_L = torch.randn(l), torch.diag(torch.rand(l) * 3)
+        mu_H, Sigma_H = torch.randn(h), torch.diag(torch.rand(h) * 3)
+    
+    elif initial_theta == 'random_invalid':
+        raise ValueError(f"Invalid initial_theta value: {initial_theta}")
+
+    else:
+        raise ValueError(f"Invalid initial_theta value: {initial_theta}")
 
     return mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H
