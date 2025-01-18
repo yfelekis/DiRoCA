@@ -136,3 +136,33 @@ class Environment:
 #             for node in self.variables:
 #                 exogenous_coefficients[node] = [sample_mean(mean_range), sample_variance(variance_range)]
 #             return exogenous_coefficients
+
+class MatrixDistances:
+    @staticmethod
+    def frobenius_distance(A, B):
+        """Frobenius norm (Euclidean norm of matrices)"""
+        diff = A - B
+        return np.sqrt(np.sum(diff * diff))
+    
+    @staticmethod
+    def squared_frobenius_distance(A, B):
+        """Squared Frobenius norm"""
+        diff = A - B
+        return np.sum(diff * diff)
+    
+    @staticmethod
+    def nuclear_norm_distance(A, B):
+        """Nuclear norm (sum of singular values)"""
+        diff = A - B
+        return np.linalg.norm(diff, ord='nuc')
+    
+    @staticmethod
+    def spectral_norm_distance(A, B):
+        """Spectral norm (largest singular value)"""
+        diff = A - B
+        return np.linalg.norm(diff, ord=2)
+    
+    @staticmethod
+    def l1_distance(A, B):
+        """Manhattan distance (sum of absolute differences)"""
+        return np.sum(np.abs(A - B))

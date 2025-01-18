@@ -1,16 +1,21 @@
-
 import numpy as np
 import torch
+import time
+
 import networkx as nx
 from tqdm import tqdm
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import seaborn as sns
 import matplotlib.pyplot as plt
+import torch.nn as nn
 
 from src.CBN import CausalBayesianNetwork as CBN
 import operations as ops
 import modularised_utils as mut
+import evaluation_utils as evut
+
+
 def monge_map(m_alpha, Sigma_alpha, m_beta, Sigma_beta):
     """
     Compute the Monge map between two multivariate Gaussians and return the transformation
@@ -295,7 +300,7 @@ def print_results(T, paramsL, paramsH, elapsed_time):
     print("Final Transformation Matrix T:")
     print("-"*30)
     print(np.array2string(T, precision=4, suppress_small=True))
-    print(f"\nCondition Number: {condition_number(T):.4f}")
+    print(f"\nCondition Number: {evut.condition_number(T):.4f}")
     
     print("\nLow-Level Parameters:")
     print("-"*30)
@@ -359,24 +364,6 @@ def verify_gelbrich_constraint(mu, Sigma, hat_mu, hat_Sigma, radius):
     
     return G_squared <= radius_squared, G_squared, radius_squared
 
-
-def condition_number(matrix):
-    """
-    Computes the condition number of a matrix using the 2-norm.
-
-    Parameters:
-        matrix (np.ndarray): Input matrix (can be square or rectangular).
-
-    Returns:
-        float: The condition number of the matrix.
-    """
-    # Compute the singular values of the matrix
-    singular_values = np.linalg.svd(matrix, compute_uv=False)
-
-    # Condition number is the ratio of the largest to smallest singular value
-    cond_number = singular_values.max() / singular_values.min()
-
-    return cond_number
 
 def compute_objective_value_old(T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H):
     """
@@ -507,8 +494,8 @@ def get_initialization(theta_hatL, theta_hatH, epsilon, delta, initial_theta):
         mu_H, Sigma_H = hat_mu_H, hat_Sigma_H
 
     elif initial_theta == 'random':
-        mu_L, Sigma_L = torch.randn(l), torch.diag(torch.rand(l) * 3)
-        mu_H, Sigma_H = torch.randn(h), torch.diag(torch.rand(h) * 3)
+        mu_L, Sigma_L = (torch.rand(l) * 10) - 5, torch.diag(torch.rand(l) * 5)
+        mu_H, Sigma_H = (torch.rand(h) * 10) - 5, torch.diag(torch.rand(h) * 5)
     
     elif initial_theta == 'random_invalid':
         raise ValueError(f"Invalid initial_theta value: {initial_theta}")
@@ -517,3 +504,299 @@ def get_initialization(theta_hatL, theta_hatH, epsilon, delta, initial_theta):
         raise ValueError(f"Invalid initial_theta value: {initial_theta}")
 
     return mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H
+
+
+#======================= BARYCENTRIC OPTIMISATION =======================
+def create_psd_matrix(size):
+    A = torch.randn(size, size).float()
+
+    return torch.matmul(A, A.T)
+
+# PCA Projection from higher to lower dimension
+def pca_projection(Sigma, target_dim):
+    """
+    Project a d×d matrix to a k×k matrix where k < d
+    Args:
+        Sigma: source matrix (d×d)
+        target_dim: target dimension k
+    Returns:
+        k×k projected matrix
+    """
+    # Perform eigenvalue decomposition
+    eigenvalues, eigenvectors = torch.linalg.eigh(Sigma)
+    
+    # Sort eigenvalues and eigenvectors in descending order
+    sorted_indices = torch.argsort(eigenvalues, descending=True)
+    eigenvalues = eigenvalues[sorted_indices]
+    eigenvectors = eigenvectors[:, sorted_indices]
+    
+    # Take only the top target_dim eigenvectors
+    V = eigenvectors[:, :target_dim]  # d×k matrix
+    
+    # Project the covariance matrix
+    Sigma_projected = torch.matmul(torch.matmul(V.T, Sigma), V)  # k×k matrix
+    
+    return Sigma_projected, V
+
+# SVD Projection from higher to lower dimension
+def svd_projection(Sigma, target_dim):
+    """
+    Project a d×d matrix to a k×k matrix where k < d using SVD
+    Args:
+        Sigma: source matrix (d×d)
+        target_dim: target dimension k
+    Returns:
+        k×k projected matrix
+    """
+    # Perform SVD
+    U, S, V = torch.svd(Sigma)
+    
+    # Take only the first target_dim components
+    U_k = U[:, :target_dim]  # d×k matrix
+    S_k = S[:target_dim]     # k singular values
+    
+    # Project the covariance matrix
+    Sigma_projected = torch.matmul(torch.matmul(U_k.T, Sigma), U_k)  # k×k matrix
+    
+    return Sigma_projected, U_k
+
+def project_covariance(Sigma, n, method):
+    if method == 'pca':
+        return pca_projection(Sigma, n)
+    elif method == 'svd':
+        return svd_projection(Sigma, n)
+    else:
+        raise ValueError(f"Unknown projection method: {method}")
+    
+def compute_struc_matrices(models, I):
+    matrices = []
+    for iota in I:
+        M_i = torch.from_numpy(models[iota]._compute_reduced_form()).float()  
+        matrices.append(M_i)
+
+    return matrices
+
+def compute_mu_bary(struc_matrices, mu):
+    struc_matrices_tensor = torch.stack(struc_matrices)
+    mu_barycenter         = torch.sum(struc_matrices_tensor @ mu, dim=0) / len(struc_matrices)
+
+    return mu_barycenter
+
+def compute_Sigma_bary(matrices, Sigma, initialization, max_iter, tol):
+
+    Sigma_matrices = []
+    for M in matrices:
+        Sigma_matrices.append(M @ Sigma @ M.T)
+
+    return covariance_bary_optim(Sigma_matrices, initialization, max_iter, tol)
+
+def covariance_bary_optim(Sigma_list, initialization, max_iter, tol):
+    
+    if initialization == 'psd':
+        S_0 = create_psd_matrix(Sigma_list[0].shape[0])
+    elif initialization == 'avg':
+        S_0 = sum(Sigma_list) / len(Sigma_list)
+    
+    S_n = S_0.clone()
+    n   = len(Sigma_list)  # Number of matrices
+    lambda_j = 1.0 / n   # Equal weights
+    
+    for n in range(max_iter):
+        S_n_old = S_n.clone()
+
+        S_n_inv_half = sqrtm_svd(regmat(torch.inverse(S_n)))
+        
+        # Compute the sum of S_n^(1/2) Σ_j S_n^(1/2)
+        sum_term = torch.zeros_like(S_n)
+        for Sigma_j in Sigma_list:
+            S_n_half   = sqrtm_svd(regmat(S_n))
+            inner_term = torch.matmul(torch.matmul(S_n_half, Sigma_j), S_n_half)
+            sqrt_term  = sqrtm_svd(regmat(inner_term))
+            sum_term  += lambda_j * sqrt_term
+        # Square the sum term
+        squared_sum = torch.matmul(sum_term, sum_term.T)
+
+        S_n_next = torch.matmul(torch.matmul(S_n_inv_half, squared_sum), S_n_inv_half)
+        S_n = S_n_next
+
+        if torch.norm(S_n - S_n_old, p='fro') < tol:
+            #print(f"Converged after {n+1} iterations")
+            break
+            
+    return S_n
+
+def monge(m1, S1, m2, S2):
+    inner      = torch.matmul(sqrtm_svd(S1), torch.matmul(S2, sqrtm_svd(S1)))
+    sqrt_inner = sqrtm_svd(inner)
+    A          = torch.matmul(torch.inverse(sqrtm_svd(regmat(S1))), torch.matmul(sqrt_inner, torch.inverse(sqrtm_svd(regmat(S1)))))  
+
+    # Define the Monge map as a function τ(x) = m_2 + A(x - m_1)
+    def tau(x):
+        return m2 + A @ (x - m1)
+
+    return tau, A
+
+def regmat(matrix, eps=1e-10):
+    # Replace NaN and Inf values with finite numbers
+    matrix = torch.nan_to_num(matrix, nan=0.0, posinf=1e10, neginf=-1e10)
+    
+    # Add a small epsilon to the diagonal for numerical stability
+    if matrix.dim() == 2 and matrix.size(0) == matrix.size(1):
+        matrix = matrix + eps * torch.eye(matrix.size(0), device=matrix.device)
+    
+    return matrix
+
+
+def auto_bary_optim(theta_baryL, theta_baryH, max_iter, tol, seed):
+
+    # Set seeds for reproducibility
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    mu_L, Sigma_L = torch.from_numpy(theta_baryL['mu_U']).float(), torch.from_numpy(theta_baryL['Sigma_U']).float()
+    mu_H, Sigma_H = torch.from_numpy(theta_baryH['mu_U']).float(), torch.from_numpy(theta_baryH['Sigma_U']).float()
+
+
+    T = torch.randn(mu_H.shape[0], mu_L.shape[0], requires_grad=True)
+
+    optimizer_T        = torch.optim.Adam([T], lr=0.001)
+    previous_objective = float('inf')
+    objective_T        = 0  # Reset objective at the start of each step
+    # Optimization loop
+    for step in range(max_iter):
+        objective_T = 0  # Reset objective at the start of each step
+        
+        # Calculate each term of the Wasserstein distance
+        term1 = torch.norm(T @ mu_L - mu_H) ** 2  # Squared Euclidean distance between transformed means
+        term2 = torch.trace(T @ Sigma_L @ T.T)   # Trace term for low-level covariance
+        term3 = torch.trace(Sigma_H)             # Trace term for high-level covariance
+        
+        # Compute the intermediate covariance matrices
+        T_Sigma_L_T      = torch.matmul(T, torch.matmul(Sigma_L, T.T))
+        T_Sigma_L_T_sqrt = sqrtm_svd(T_Sigma_L_T)
+        Sigma_H_sqrt     = sqrtm_svd(Sigma_H)
+        
+        # Coupling term using nuclear norm
+        term4 = -2 * torch.norm(T_Sigma_L_T_sqrt @ Sigma_H_sqrt, p='nuc')
+
+        # Total objective is the sum of terms
+        objective_T += term1 + term2 + term3 + term4
+
+        if abs(previous_objective - objective_T.item()) < tol:
+            print(f"Converged at step {step + 1}/{max_iter} with objective: {objective_T.item()}")
+            break
+
+        # Update previous objective
+        previous_objective = objective_T.item()
+
+        # Perform optimization step
+        optimizer_T.zero_grad()  # Clear gradients
+        objective_T.backward(retain_graph=True)  # Backpropagate
+        optimizer_T.step()  # Update T
+
+    return T  # Return final objective and optimized T
+
+def barycentric_optimization(theta_L, theta_H, LLmodels, HLmodels, Ill, Ihl, projection_method, initialization, autograd, seed, max_iter, tol, display_results):
+
+    # Start timing
+    start_time = time.time()
+
+    mu_L, Sigma_L = torch.from_numpy(theta_L['mu_U']).float(), torch.from_numpy(theta_L['Sigma_U']).float()
+    mu_H, Sigma_H = torch.from_numpy(theta_H['mu_U']).float(), torch.from_numpy(theta_H['Sigma_U']).float()
+
+    epsilon, delta = theta_L['radius'], theta_H['radius']
+
+    h, l = mu_H.shape[0], mu_L.shape[0]
+
+    # Initialize the structural matrices    
+    L_matrices   = compute_struc_matrices(LLmodels, Ill)
+    H_matrices   = compute_struc_matrices(HLmodels, Ihl)
+
+    # Initilize the barycenteric means and covariances
+    mu_bary_L    = compute_mu_bary(L_matrices, mu_L)
+    mu_bary_H    = compute_mu_bary(H_matrices, mu_H)
+
+    Sigma_bary_L = compute_Sigma_bary(L_matrices, Sigma_L, initialization, max_iter, tol)
+    Sigma_bary_H = compute_Sigma_bary(H_matrices, Sigma_H, initialization, max_iter, tol)
+    
+    proj_Sigma_bary_L, Tp = project_covariance(Sigma_bary_L, h, projection_method)
+    proj_mu_bary_L        = torch.matmul(Tp.T, mu_bary_L)
+
+    paramsL = {'mu_U': mu_bary_L.detach().numpy(), 'Sigma_U': Sigma_bary_L.detach().numpy(), 'radius': epsilon}
+    paramsH = {'mu_U': mu_bary_H.detach().numpy(), 'Sigma_U': Sigma_bary_H.detach().numpy(), 'radius': delta}
+
+    if autograd == True:
+        params_bary_autograd = {
+                                'theta_baryL': paramsL,
+                                'theta_baryH': paramsH,
+                                'max_iter': 10,
+                                'tol': 1e-5,
+                                'seed': seed
+                               }
+        
+        T = auto_bary_optim(**params_bary_autograd)
+
+    else:
+        tau, A = monge(proj_mu_bary_L, proj_Sigma_bary_L, mu_bary_H, Sigma_bary_H)
+        T = torch.matmul(A, Tp.T)
+
+    T  = T.detach().numpy()
+    Tp = Tp.detach().numpy()
+
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+
+    # Display results
+    if display_results == True: 
+        print_results(T, paramsL, paramsH, elapsed_time)
+
+    return paramsL, paramsH, T
+
+
+#======================= EMPIRICA OPTIMISATION =======================
+
+def empirical_objective(U_L, U_H, T, Theta, Phi, L_models, H_models, Ill, omega):
+
+    loss_iota = 0
+    for iota in Ill:
+        L_i = torch.from_numpy(L_models[iota].F).float()
+        H_i = torch.from_numpy(H_models[omega[iota]].F).float()
+        
+        pert_L_i = U_L + Theta
+        pert_H_i = U_H + Phi
+        
+        diff = T @ L_i @ pert_L_i.T - H_i @ pert_H_i.T
+        # Normalize by matrix size
+        loss_iota += torch.norm(diff, p='fro')**2 / (diff.shape[0] * diff.shape[1])
+    
+    loss = loss_iota / len(Ill)
+    return loss
+
+def project_onto_frobenius_ball(matrix, radius):
+    """
+    Projects matrix onto the ball defined by ||matrix||_F^2 <= radius_squared
+    
+    Args:
+        matrix: The matrix to project
+        radius_squared: The squared radius (N*epsilon^2 or N*delta^2)
+    """
+    N = matrix.shape[0]
+    squared_norm = torch.norm(matrix, p='fro')**2
+    if squared_norm > N * radius**2:
+        return matrix * torch.sqrt(N * radius**2 / squared_norm)
+    return matrix
+
+def init_in_frobenius_ball(shape, epsilon):
+    """
+    Initialize a matrix inside the Frobenius ball with ||X||_F^2 <= N*epsilon^2
+    """
+    num_samples      = shape[0]
+    matrix           = torch.randn(*shape)  # Standard normal initialization
+    squared_norm     = torch.norm(matrix, p='fro')**2
+    max_squared_norm = num_samples * epsilon**2
+    
+    # Scale to ensure it's inside the ball
+    scaling_factor = torch.sqrt(max_squared_norm / squared_norm) * torch.rand(1)  # random scaling between 0 and max radius
+    matrix = matrix * scaling_factor
+    
+    return nn.Parameter(matrix)  # This ensures requires_grad=True

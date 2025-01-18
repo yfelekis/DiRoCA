@@ -1054,3 +1054,6 @@ def load_T(experiment):
 def load_type_to_params(experiment, noise_type, level):
     type_to_params_dict = joblib.load(f'data/{experiment}/type_to_params.pkl')
     return type_to_params_dict[noise_type][level]
+
+def load_empirical_boundary_params(experiment, pert_level):
+    return joblib.load(f'data/{experiment}/empirical_boundary_params.pkl')[pert_level]

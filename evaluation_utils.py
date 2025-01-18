@@ -6,23 +6,43 @@ from sklearn.mixture import GaussianMixture
 from scipy.linalg import sqrtm
 import seaborn as sns
 import modularised_utils as mut
+import operations as oput
 
-def contaminate_linear_relationships(data, contamination_fraction=0.3, contamination_type='multiplicative'):
+def condition_number(matrix):
     """
-    Contaminate linear relationships between variables by applying a specific non-linear transformation.
+    Computes the condition number of a matrix using the 2-norm.
+
+    Parameters:
+        matrix (np.ndarray): Input matrix (can be square or rectangular).
+
+    Returns:
+        float: The condition number of the matrix.
+    """
+    # Compute the singular values of the matrix
+    singular_values = np.linalg.svd(matrix, compute_uv=False)
+
+    # Condition number is the ratio of the largest to smallest singular value
+    cond_number = singular_values.max() / singular_values.min()
+
+    return cond_number
+
+def contaminate_linear_relationships(data, contamination_fraction=0.3, contamination_type='multiplicative', k=1.345):
+    """
+    Contaminate linear relationships between variables by applying a specific transformation.
     
     Args:
         data: numpy array of shape (n_samples, n_vars)
         contamination_fraction: fraction of samples to contaminate (default: 0.3)
-        contamination_type: type of non-linear transformation to apply (default: 'multiplicative')
-                          options: ['multiplicative', 'threshold', 'exponential', 'sinusoidal']
+        contamination_type: type of transformation to apply (default: 'multiplicative')
+                          options: ['multiplicative', 'threshold', 'exponential', 'sinusoidal', 'huber']
+        k: Huber parameter (default=1.345 for 95% efficiency), only used if contamination_type='huber'
     
     Returns:
         Contaminated data array
     """
-    if contamination_type not in ['multiplicative', 'threshold', 'exponential', 'sinusoidal']:
+    if contamination_type not in ['multiplicative', 'threshold', 'exponential', 'sinusoidal', 'huber']:
         raise ValueError(f"Unknown contamination type: {contamination_type}. "
-                       f"Must be one of: ['multiplicative', 'threshold', 'exponential', 'sinusoidal']")
+                       f"Must be one of: ['multiplicative', 'threshold', 'exponential', 'sinusoidal', 'huber']")
     
     contaminated = data.copy()
     n_samples, n_vars = data.shape
@@ -32,36 +52,57 @@ def contaminate_linear_relationships(data, contamination_fraction=0.3, contamina
     contaminate_idx = np.random.choice(n_samples, n_contaminate, replace=False)
     
     # Apply the specified contamination
-    for idx in contaminate_idx:
-        if contamination_type == 'multiplicative':
-            # Multiply pairs of variables
-            for i in range(n_vars-1):
-                contaminated[idx, i+1] *= contaminated[idx, i]
-                
-        elif contamination_type == 'threshold':
-            # Create discontinuous jumps
-            thresholds = np.random.randn(n_vars)
-            for i in range(n_vars):
-                if contaminated[idx, i] > thresholds[i]:
-                    contaminated[idx, i] *= 2
-                else:
-                    contaminated[idx, i] *= 0.5
+    if contamination_type == 'huber':
+        # For each variable
+        for j in range(n_vars):
+            # Compute median and MAD for robust statistics
+            median = np.median(data[:, j])
+            mad = np.median(np.abs(data[:, j] - median)) * 1.4826  # consistent with normal distribution
+            
+            # Apply Huber function to selected indices
+            for idx in contaminate_idx:
+                x = data[idx, j]
+                if np.abs(x - median) > k * mad:
+                    # Apply Huber transformation
+                    sign = np.sign(x - median)
+                    contaminated[idx, j] = median + sign * k * mad
+    else:
+        for idx in contaminate_idx:
+            if contamination_type == 'multiplicative':
+                # Multiply pairs of variables
+                for i in range(n_vars-1):
+                    contaminated[idx, i+1] *= contaminated[idx, i]
                     
-        elif contamination_type == 'exponential':
-            # Create exponential relationships
-            contaminated[idx] = np.exp(contaminated[idx] * 0.5) - 1
-                
-        elif contamination_type == 'sinusoidal':
-            # Add sinusoidal transformations
-            contaminated[idx] = np.sin(contaminated[idx])
+            elif contamination_type == 'threshold':
+                # Create discontinuous jumps
+                thresholds = np.random.randn(n_vars)
+                for i in range(n_vars):
+                    if contaminated[idx, i] > thresholds[i]:
+                        contaminated[idx, i] *= 2
+                    else:
+                        contaminated[idx, i] *= 0.5
+                        
+            elif contamination_type == 'exponential':
+                # Create exponential relationships
+                contaminated[idx] = np.exp(contaminated[idx] * 0.5) - 1
+                    
+            elif contamination_type == 'sinusoidal':
+                # Add sinusoidal transformations
+                contaminated[idx] = np.sin(contaminated[idx])
     
     # Normalize to keep similar scale as original data
     for i in range(n_vars):
         orig_std = np.std(data[:, i])
         orig_mean = np.mean(data[:, i])
-        contaminated[:, i] = ((contaminated[:, i] - np.mean(contaminated[:, i])) 
-                            / np.std(contaminated[:, i]) * orig_std + orig_mean)
-    
+        cont_std = np.std(contaminated[:, i])
+        
+        # Avoid division by zero by checking if std is too small
+        if cont_std < 1e-10:  # numerical threshold for "zero"
+            contaminated[:, i] = orig_mean  # set all values to mean if no variation
+        else:
+            contaminated[:, i] = ((contaminated[:, i] - np.mean(contaminated[:, i])) 
+                                / cont_std * orig_std + orig_mean)
+            
     return contaminated
 
 def plot_contamination_effects(original, contaminated):
@@ -104,7 +145,7 @@ def plot_contamination_effects(original, contaminated):
     plt.tight_layout()
     plt.show()
 
-def plot_abstraction_error(abstraction_error_dict):
+def plot_abstraction_error(abstraction_error_dict, spacing_factor=0.2):
     """
     Plot abstraction errors with error bars using Seaborn.
     """
@@ -118,41 +159,103 @@ def plot_abstraction_error(abstraction_error_dict):
     sns.set_style("whitegrid")
     
     # Create figure
-    plt.figure(figsize=(10, 6))
+    width = max(4, len(methods) * spacing_factor)  # Adjust width based on number of methods
+    plt.figure(figsize=(width, 5))
     
     # Create error bar plot
     sns.scatterplot(
-        x=methods,
+        x=range(len(methods)),
         y=means,
         color='purple',
-        s=100  # marker size
+        s=100
     )
     
     # Add error bars
     plt.errorbar(
-        x=methods,
+        x=range(len(methods)),
         y=means,
         yerr=errors,
-        fmt='none',  # no connecting lines
+        fmt='none',
         color='green',
         capsize=5,
         capthick=2,
         elinewidth=2
     )
     
-    # Customize plot
-    plt.yscale('log')  # log scale for y-axis
-    plt.xticks(rotation=45, ha='right')  # rotate x labels
+    # Customize plot with tighter spacing
+    plt.yscale('log')
+    plt.xticks(
+        range(len(methods)),
+        methods,
+        rotation=45,
+        ha='right'
+    )
+    
+    # Adjust margins to bring labels closer
+    plt.margins(x=0.1)  # Reduce horizontal margins
+    
     plt.title('Abstraction Error by Method')
     plt.xlabel('Method')
     plt.ylabel('Error')
     
-    # Adjust layout to prevent label cutoff
-    plt.tight_layout()
+    # Adjust layout with tighter spacing
+    plt.tight_layout(pad=1.0)  # Reduce padding
     
-    # Show plot
     plt.show()
     
+    return
+
+def plot_condition_nums(cn_dict, spacing_factor=0.2):
+    """
+    Plot condition numbers with consistent spacing logic.
+    """
+    # Extract data from dictionary
+    methods = list(cn_dict.keys())
+    condition_number = [v for v in cn_dict.values()]
+    
+    # Set style
+    sns.set_style("whitegrid")
+    
+    # Create figure with adjusted width
+    width = max(4, len(methods) * spacing_factor)
+    plt.figure(figsize=(width, 5))
+    
+    # Create scatter plot
+    sns.scatterplot(
+        x=range(len(methods)),
+        y=condition_number,
+        color='purple',
+        s=200
+    )
+    
+    # Add markers
+    plt.errorbar(
+        x=range(len(methods)),
+        y=condition_number,
+        yerr=None,
+        fmt='o',
+        color='purple',
+        capsize=5,
+        capthick=5,
+        elinewidth=2
+    )
+    
+    # Customize plot with tighter spacing
+    plt.yscale('log')
+    plt.xticks(
+        range(len(methods)),
+        methods,
+        rotation=45,
+        ha='right'
+    )
+    
+    plt.margins(x=0.1)
+    plt.title('Condition Number by Method')
+    plt.xlabel('Method')
+    plt.ylabel('Condition Number')
+    
+    plt.tight_layout(pad=1.0)
+    plt.show()
     return
 
 def plot_distribution_shifts(original, modified):
@@ -216,7 +319,7 @@ def plot_distribution_changes(original, modified, title="Distribution Changes"):
     plt.tight_layout()
     plt.show()
 
-def add_random_noise(data, noise_type, level, experiment, normalize):
+def generate_noise(data, noise_type, level, experiment, normalize, random_range=None):
    
     n_samples, n_vars = data.shape
     
@@ -272,6 +375,16 @@ def add_random_noise(data, noise_type, level, experiment, normalize):
         noise = np.random.chisquare(df=1, size=(n_samples, n_vars))
         noise = noise - 1  # Center to mean 0
     
+    elif noise_type == 'random_normal':
+        low, high = random_range
+        noise_mu = np.random.uniform(low=low, high=high, size=n_vars)
+        noise_Sigma = np.diag(np.random.uniform(0, high, size=n_vars))
+
+        noise = np.random.multivariate_normal(
+                                                mean=noise_mu, 
+                                                cov=noise_Sigma, 
+                                                size=n_samples
+                                                )
     else:
         raise ValueError(f"Unknown noise type: {noise_type}")
     
@@ -279,4 +392,20 @@ def add_random_noise(data, noise_type, level, experiment, normalize):
     if normalize == True:
         noise = noise / np.std(noise, axis=0)
     
-    return data + noise
+    return noise
+
+def generate_pertubation(data, pert_type, pert_level):
+
+    N, n = data.shape
+    
+    boundary_matrix, radius = mut.load_empirical_boundary_params(experiment, pert_level)
+    if pert_type == 'constraint_set':
+        P = oput.init_in_frobenius_ball((N, n), radius).detach().numpy()
+
+    elif pert_type == 'boundary':
+        P = boundary_matrix
+
+    elif pert_type == 'random':
+        P = np.random.randn(N, n)
+
+    return P
