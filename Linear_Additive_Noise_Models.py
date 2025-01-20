@@ -95,6 +95,7 @@ class LinearAddSCM:
     
     def simulate_reduced_form(self, exogenous):
         return exogenous @ self.F
+    
 
     def print_dag(self):
         """

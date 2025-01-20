@@ -1057,3 +1057,6 @@ def load_type_to_params(experiment, noise_type, level):
 
 def load_empirical_boundary_params(experiment, pert_level):
     return joblib.load(f'data/{experiment}/empirical_boundary_params.pkl')[pert_level]
+
+def load_abstraction(experiment, method):
+    return joblib.load(f"data/{experiment}/{method}.pkl")

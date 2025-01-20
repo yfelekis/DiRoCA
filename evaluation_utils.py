@@ -26,7 +26,7 @@ def condition_number(matrix):
 
     return cond_number
 
-def contaminate_linear_relationships(data, contamination_fraction=0.3, contamination_type='multiplicative', k=1.345):
+def contaminate_linear_relationships(data, contamination_fraction, contamination_type, k=1.345):
     """
     Contaminate linear relationships between variables by applying a specific transformation.
     
@@ -320,7 +320,6 @@ def plot_distribution_changes(original, modified, title="Distribution Changes"):
     plt.show()
 
 def generate_noise(data, noise_type, level, experiment, normalize, random_range=None):
-   
     n_samples, n_vars = data.shape
     
     if noise_type in ['gelbrich_gaussian', 'boundary_gaussian']:
@@ -394,8 +393,7 @@ def generate_noise(data, noise_type, level, experiment, normalize, random_range=
     
     return noise
 
-def generate_pertubation(data, pert_type, pert_level):
-
+def generate_pertubation(data, pert_type, pert_level, experiment):
     N, n = data.shape
     
     boundary_matrix, radius = mut.load_empirical_boundary_params(experiment, pert_level)
@@ -409,3 +407,18 @@ def generate_pertubation(data, pert_type, pert_level):
         P = np.random.randn(N, n)
 
     return P
+
+def compute_abstraction_error(T, base, abst, metric):
+    tau_base   = base @ T.T
+    tau_muL    = np.mean(tau_base, axis=0)
+    tau_sigmaL = np.cov(tau_base, rowvar=False)
+    muH        = np.mean(abst, axis=0)
+    sigmaH     = np.cov(abst, rowvar=False)
+
+    if metric == 'wass':
+        dist = mut.compute_wasserstein(tau_muL, tau_sigmaL, muH, sigmaH)
+        #dist = 1 - np.exp(-dist)
+    elif metric == 'js':
+        dist = mut.compute_jensenshannon(tau_base, abst)
+
+    return dist
