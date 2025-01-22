@@ -319,10 +319,10 @@ def plot_distribution_changes(original, modified, title="Distribution Changes"):
     plt.tight_layout()
     plt.show()
 
-def generate_noise(data, noise_type, level, experiment, normalize, random_range=None):
+def generate_noise(data, noise_type, level, experiment, normalize, random_range=None, rad=None):
     n_samples, n_vars = data.shape
     
-    if noise_type in ['gelbrich_gaussian', 'boundary_gaussian']:
+    if noise_type in ['gelbrich_gaussian', 'boundary_gaussian', 'rand_epsilon_delta']:
 
         params = mut.load_type_to_params(experiment, noise_type, level)
 
@@ -359,6 +359,26 @@ def generate_noise(data, noise_type, level, experiment, normalize, random_range=
                                                 size=n_samples
                                                 )
     
+    elif noise_type == 'rand_epsilon_delta':
+        mu_U_hat    = params['mu_U'] #+ np.ones(params_Lerica['mu_U'].shape[0])
+        Sigma_U_hat = params['Sigma_U'] #+ np.random.normal(0, 0.1, size=params_Lerica['Sigma_U'].shape)
+        radius      = rad
+
+        # Sample moments from Gelbrich ball
+        moments = mut.sample_moments_U(
+                                        mu_hat=mu_U_hat, 
+                                        Sigma_hat=Sigma_U_hat, 
+                                        bound=radius, 
+                                        num_envs=1
+                                        )
+        
+        noise_mu, noise_Sigma = moments[0]
+        
+        noise = np.random.multivariate_normal(
+                                                mean=noise_mu, 
+                                                cov=noise_Sigma, 
+                                                size=n_samples
+                                                )
     # Generate noise based on type
     elif noise_type == 'uniform':
         noise = np.random.uniform(low=-1, high=1, size=(n_samples, n_vars))

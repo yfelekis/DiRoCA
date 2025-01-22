@@ -752,6 +752,453 @@ def barycentric_optimization(theta_L, theta_H, LLmodels, HLmodels, Ill, Ihl, pro
 
     return paramsL, paramsH, T
 
+#======================= GELBRICH OPTIMISATION =======================
+
+def check_for_invalid_values(matrix):
+    if torch.isnan(matrix).any() or torch.isinf(matrix).any():
+        #print("Matrix contains NaN or Inf values!")
+        return True
+    return False
+
+def handle_nans(matrix, replacement_value=0.0):
+    # Replace NaNs with a given value (default is 0)
+    if torch.isnan(matrix).any():
+        print("Warning: NaN values found! Replacing with zero.")
+        matrix = torch.nan_to_num(matrix, nan=replacement_value)
+    return matrix
+
+
+def compute_grad_mu_L(T, mu_L, mu_H, LLmodels, HLmodels, lambda_L, hat_mu_L):
+
+    sum_term     = torch.zeros_like(mu_L)
+    for n, iota in enumerate(Ill):
+        L_i   = torch.from_numpy(LLmodels[iota].F).float() 
+        V_i   = T @ L_i  
+        H_i   = torch.from_numpy(HLmodels[omega[iota]].F).float() 
+
+        sum_term = sum_term + V_i.T @ V_i @ mu_L.float() - V_i.T @ H_i @ mu_H.float()
+    
+    reg_term     = 2 * lambda_L * (mu_L - hat_mu_L) # reg_term = -2 * lambda_L * (mu_L - hat_mu_L)
+    grad_mu_L = (2 / (len(Ill))) * sum_term + reg_term
+
+    return grad_mu_L
+
+def compute_grad_mu_H(T, mu_L, mu_H, LLmodels, HLmodels, lambda_H, hat_mu_H):
+
+    sum_term     = torch.zeros_like(mu_H)
+    for n, iota in enumerate(Ill):
+        L_i   = torch.from_numpy(LLmodels[iota].F).float()  
+        V_i   = T @ L_i  
+        H_i   = torch.from_numpy(HLmodels[omega[iota]].F).float()  
+
+        sum_term = sum_term + H_i.T @ H_i @ mu_H.float() - (V_i.T @ H_i).T @ mu_L.float()
+    
+    reg_term     = 2 * lambda_H * (mu_H - hat_mu_H) # reg_term = -2 * lambda_H * (mu_H - hat_mu_H)
+    grad_mu_H = (2 / len(Ill)) * sum_term + reg_term
+
+    return grad_mu_H
+
+
+def compute_grad_Sigma_L_half(T, Sigma_L, LLmodels, lambda_L, hat_Sigma_L):
+
+    sum_term         = torch.zeros_like(Sigma_L)
+    for n, iota in enumerate(Ill):
+        L_i          = torch.from_numpy(LLmodels[iota].F)
+        V_i          = T @ L_i.float()
+
+        sum_term        = sum_term + V_i.T @ V_i
+
+    Sigma_L_sqrt     = sqrtm_svd(Sigma_L)  
+    hat_Sigma_L_sqrt = sqrtm_svd(hat_Sigma_L) 
+
+    reg_term         = 2 * lambda_L * (Sigma_L_sqrt - hat_Sigma_L_sqrt) @ torch.inverse(Sigma_L_sqrt) # reg_term = -2 * lambda_L * (Sigma_L_sqrt - hat_Sigma_L_sqrt) @ torch.inverse(Sigma_L_sqrt)
+    grad_Sigma_L     = (2 / (n+1)) * sum_term + reg_term
+    
+    return grad_Sigma_L
+
+def compute_grad_Sigma_H_half(T, Sigma_H, HLmodels, lambda_H, hat_Sigma_H):
+
+    sum_term            = torch.zeros_like(Sigma_H)
+    for n, iota in enumerate(Ill):
+        H_i          = torch.from_numpy(HLmodels[omega[iota]].F).float()
+        
+        sum_term     = sum_term + H_i.T @ H_i
+
+    Sigma_H_sqrt     = sqrtm_svd(Sigma_H)  
+    hat_Sigma_H_sqrt = sqrtm_svd(hat_Sigma_H) 
+
+    reg_term            = 2 * lambda_H * (Sigma_H_sqrt - hat_Sigma_H_sqrt) @ torch.inverse(Sigma_H_sqrt) # reg_term = -2 * lambda_H * (Sigma_H_sqrt - hat_Sigma_H_sqrt) @ torch.inverse(Sigma_H_sqrt)
+    grad_Sigma_H     = (2 / (n+1)) * sum_term + reg_term
+
+    return grad_Sigma_H
+
+def prox_grad_Sigma_L(T, Sigma_L_half, LLmodels, Sigma_H, HLmodels, lambda_param_L):
+
+    Sigma_L               = torch.zeros_like(Sigma_L_half, dtype=torch.float32)  
+    for n, iota in enumerate(Ill):
+        L_i               = torch.from_numpy(LLmodels[iota].F).float()  
+        V_i               = regmat(T @ L_i)  
+        H_i               = torch.from_numpy(HLmodels[omega[iota]].F).float()  
+        
+        Sigma_L_half      = Sigma_L_half.float()
+        V_Sigma_V         = V_i @ Sigma_L_half @ V_i.T
+        sqrtm_V_Sigma_V   = sqrtm_svd(regmat(V_Sigma_V)) 
+        
+        prox_Sigma_L_half = prox_operator(sqrtm_V_Sigma_V, lambda_param_L) @ prox_operator(sqrtm_V_Sigma_V, lambda_param_L).T
+        
+        ll_term           = regmat(torch.linalg.pinv(V_i)) @ regmat(prox_Sigma_L_half) @ regmat(torch.linalg.pinv(V_i).T)
+
+        Sigma_H           = Sigma_H.float()  
+        H_Sigma_H         = H_i @ Sigma_H @ H_i.T
+
+        hl_term           = torch.norm(sqrtm_svd(regmat(H_Sigma_H)), p='fro') 
+
+        Sigma_L           = Sigma_L + (ll_term * hl_term)
+
+    Sigma_L_final         = (2 / (n+1)) * Sigma_L 
+    Sigma_L_final         = diagonalize(Sigma_L_final)
+
+    return Sigma_L_final
+
+def prox_grad_Sigma_H(T, Sigma_H_half, LLmodels, Sigma_L, HLmodels, lambda_param_H):
+
+    Sigma_H               = torch.zeros_like(Sigma_H_half, dtype=torch.float32)
+    for n, iota in enumerate(Ill):
+        L_i               = torch.from_numpy(LLmodels[iota].F).float()
+        V_i               = T @ L_i #oput.regmat(T @ L_i)
+        H_i               = torch.from_numpy(HLmodels[omega[iota]].F).float()
+
+        Sigma_H_half      = Sigma_H_half.float()
+        H_Sigma_H         = H_i @ Sigma_H_half @ H_i.T
+        sqrtm_H_Sigma_H   = sqrtm_svd(H_Sigma_H)
+        #H_Sigma_H         = oput.regmat(H_i @ Sigma_H_half @ H_i.T)
+  
+        prox_Sigma_H_half = prox_operator(sqrtm_H_Sigma_H, lambda_param_H) @ prox_operator(sqrtm_H_Sigma_H, lambda_param_H).T
+        hl_term_iota      = torch.inverse(H_i) @ prox_Sigma_H_half @ torch.inverse(H_i).T
+        
+        Sigma_L           = Sigma_L.float()
+        V_Sigma_V         = V_i @ Sigma_L @ V_i.T
+        ll_term_iota      = torch.norm(sqrtm_svd(V_Sigma_V), p='fro')
+
+        Sigma_H           = Sigma_H + (ll_term_iota * hl_term_iota)
+    
+    Sigma_H_final         = (2 / (n+1)) * Sigma_H
+    Sigma_H_final         = diagonalize(Sigma_H_final)
+    
+    return Sigma_H_final
+
+
+def optimize_min(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels,lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
+                                                            epsilon, delta, num_steps_min, optimizer_T, max_grad_norm, seed, xavier):
+
+    torch.manual_seed(seed)
+    if xavier:
+        T = torch.nn.init.xavier_normal_(T, gain=0.01)
+
+    cur_mu_L    = mu_L.clone()
+    cur_mu_H    = mu_H.clone()
+    cur_Sigma_L = Sigma_L.clone()
+    cur_Sigma_H = Sigma_H.clone()
+
+    objective_T_step = torch.tensor(0.0)  
+    T_objectives_epoch = []
+   
+    for step in range(num_steps_min):
+
+        objective_iota = torch.tensor(0.0)        
+        for n, iota in enumerate(Ill):
+            L_i = torch.from_numpy(LLmodels[iota].F).float()
+            H_i = torch.from_numpy(HLmodels[omega[iota]].F).float()
+            
+            obj_value_iota   = compute_objective_value(T, L_i, H_i, cur_mu_L, cur_mu_H, cur_Sigma_L, cur_Sigma_H,
+                                                            lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
+                                                            epsilon, delta)
+            
+            objective_iota = objective_iota + obj_value_iota
+
+        objective_T_step = objective_iota/(n+1)
+        T_objectives_epoch.append(objective_T_step)
+
+        if torch.isnan(T).any():
+            print("T contains NaN! Returning zero matrix.")
+            print('Failed at step:', step+1)
+            # Return zero matrix of same shape as T
+            return torch.zeros_like(T), objective_T_step, T_objectives_epoch
+
+        optimizer_T.zero_grad() 
+        objective_T_step.backward(retain_graph=True)
+        # Add gradient clipping before optimizer step
+        if max_grad_norm < float('inf'):
+            torch.nn.utils.clip_grad_norm_([T], max_grad_norm)
+
+        optimizer_T.step()  
+        #print(f"Min step {step+1}/{num_steps_min}, Objective: {objective_T_step.item()}, Gradient Norm: {torch.norm(T.grad)}")
+    
+    return T, objective_T_step, T_objectives_epoch
+
+
+def optimize_max(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
+                 lambda_L, lambda_H, lambda_param_L, lambda_param_H, eta, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, max_grad_norm):
+    
+    torch.manual_seed(seed)
+
+    cur_T = T.clone()
+    theta_objectives_epoch = []
+    objective_theta_step = torch.tensor(0.0)
+    
+    max_converged = False
+    # Pre-compute constant terms
+    L_matrices = {iota: torch.from_numpy(LLmodels[iota].F).float() for iota in Ill}
+    H_matrices = {iota: torch.from_numpy(HLmodels[omega[iota]].F).float() for iota in Ill}
+        
+    # Initialize running averages for adaptive learning rate
+    avg_grad_norm = 0
+    beta = 0.9  # momentum factor
+    
+    for step in range(num_steps_max): 
+        # Compute all gradients first
+        grad_mu_L = compute_grad_mu_L(cur_T, mu_L, mu_H, LLmodels, HLmodels, lambda_L, hat_mu_L)
+        grad_mu_H = compute_grad_mu_H(cur_T, mu_L, mu_H, LLmodels, HLmodels, lambda_H, hat_mu_H)
+        grad_Sigma_L = compute_grad_Sigma_L_half(cur_T, Sigma_L, LLmodels, lambda_L, hat_Sigma_L)
+        grad_Sigma_H = compute_grad_Sigma_H_half(cur_T, Sigma_H, HLmodels, lambda_H, hat_Sigma_H)
+
+        # Clip gradients
+        if max_grad_norm < float('inf'):
+            grad_mu_L = torch.clamp(grad_mu_L, -max_grad_norm, max_grad_norm)
+            grad_mu_H = torch.clamp(grad_mu_H, -max_grad_norm, max_grad_norm)
+            grad_Sigma_L = torch.clamp(grad_Sigma_L, -max_grad_norm, max_grad_norm)
+            grad_Sigma_H = torch.clamp(grad_Sigma_H, -max_grad_norm, max_grad_norm)
+
+        # Compute current gradient norm
+        current_grad_norm = (torch.norm(grad_mu_L) + torch.norm(grad_mu_H) + 
+                           torch.norm(grad_Sigma_L) + torch.norm(grad_Sigma_H))
+        
+        # Update running average
+        avg_grad_norm = beta * avg_grad_norm + (1 - beta) * current_grad_norm
+        
+        # Adjust learning rate if gradients are getting too large
+        current_eta = eta
+        if avg_grad_norm > 1.0:
+            current_eta = eta / avg_grad_norm
+
+        # Update parameters
+        mu_L = mu_L + current_eta * grad_mu_L
+        mu_H = mu_H + current_eta * grad_mu_H
+        
+        Sigma_L_half = Sigma_L + current_eta * grad_Sigma_L
+        Sigma_H_half = Sigma_H + current_eta * grad_Sigma_H
+        
+        # Proximal updates
+        Sigma_L = prox_grad_Sigma_L(cur_T, Sigma_L_half, LLmodels, Sigma_H, HLmodels, lambda_param_L)
+        Sigma_H = prox_grad_Sigma_H(cur_T, Sigma_H_half, LLmodels, Sigma_L, HLmodels, lambda_param_H)
+        
+        if project_onto_gelbrich:
+            mu_L, Sigma_L = project_onto_gelbrich_ball(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
+            mu_H, Sigma_H = project_onto_gelbrich_ball(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
+            
+            satisfied_L, dist_L, epsi = verify_gelbrich_constraint(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
+            satisfied_H, dist_H, delt = verify_gelbrich_constraint(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
+            
+            constraints_error_check(satisfied_L, dist_L, epsi, satisfied_H, dist_H, delt)
+
+        objective_iota = 0
+        for iota in Ill:
+            obj_value_iota = compute_objective_value(
+                                                            cur_T, L_matrices[iota], H_matrices[iota], 
+                                                            mu_L, mu_H, Sigma_L, Sigma_H,
+                                                            lambda_L, lambda_H, hat_mu_L, hat_mu_H, 
+                                                            hat_Sigma_L, hat_Sigma_H, epsilon, delta
+                                                         )
+            objective_iota += obj_value_iota
+
+        objective_theta_step = objective_iota/len(Ill)
+        theta_objectives_epoch.append(objective_theta_step)
+
+        # Early stopping check
+        if step > 0 and abs(theta_objectives_epoch[-1] - theta_objectives_epoch[-2]) < 1e-5:
+            max_converged = True
+
+    return mu_L, Sigma_L, mu_H, Sigma_H, objective_theta_step, theta_objectives_epoch, max_converged
+
+def optimize_max_proxgrad(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, 
+                lambda_L, lambda_H, lambda_param_L, lambda_param_H, eta, num_steps_max, epsilon, delta, seed):
+
+    torch.manual_seed(seed)
+    cur_T   = T.clone()
+
+    mu_L    = mu_L.clone().detach().requires_grad_(True)
+    mu_H    = mu_H.clone().detach().requires_grad_(True)
+    Sigma_L = Sigma_L.clone().detach().requires_grad_(True)
+    Sigma_H = Sigma_H.clone().detach().requires_grad_(True)
+
+    max_converged = False
+    
+    # Create optimizers for means and covariances
+    optimizer_mu    = torch.optim.Adam([mu_L, mu_H], lr=eta)
+    optimizer_sigma = torch.optim.Adam([Sigma_L, Sigma_H], lr=eta)
+    
+    theta_objectives_epoch = []
+    
+    for step in range(num_steps_max):
+        # Zero gradients
+        optimizer_mu.zero_grad()
+        optimizer_sigma.zero_grad()
+        
+        # Compute objective for this step
+        obj_values = []
+        for n, iota in enumerate(Ill):
+            L_i = torch.from_numpy(LLmodels[iota].F).float()
+            H_i = torch.from_numpy(HLmodels[omega[iota]].F).float()
+            
+            # Compute objective value
+            obj_value_iota = compute_objective_value(cur_T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H, 
+                                                            lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
+                                                            epsilon, delta)
+            obj_values.append(obj_value_iota)
+        
+        # Sum objectives without in-place operations
+        objective_iota = torch.stack(obj_values).sum()
+        # Total objective
+        objective = -(objective_iota/(n+1))
+        
+        # Store objective value
+        theta_objectives_epoch.append(-objective.item())
+        
+        # Early stopping check
+        if step > 0 and abs(theta_objectives_epoch[-1] - theta_objectives_epoch[-2]) < 1e-5:
+            max_converged = True
+
+        # Backward pass
+        objective.backward()
+        
+        # Update means using optimizer
+        optimizer_mu.step()
+        
+        # Store current Sigma values before proximal update
+        Sigma_L_half = Sigma_L.detach().clone()
+        Sigma_H_half = Sigma_H.detach().clone()
+        
+        # Update Sigma_half values using optimizer
+        optimizer_sigma.step()
+        
+        # Manual proximal gradient steps for Sigma_L and Sigma_H
+        with torch.no_grad():
+            # Proximal step for Sigma_L
+            Sigma_L = prox_grad_Sigma_L(cur_T, Sigma_L_half, LLmodels, Sigma_H_half, HLmodels, lambda_param_L)
+            
+            # Proximal step for Sigma_H
+            Sigma_H = prox_grad_Sigma_H(cur_T, Sigma_H_half, LLmodels, Sigma_L, HLmodels, lambda_param_H)
+            
+            # Update the tensor values for next iteration
+            Sigma_L.requires_grad_(True)
+            Sigma_H.requires_grad_(True)
+
+    return (mu_L.detach(), Sigma_L.detach(), mu_H.detach(), Sigma_H.detach(), objective.detach(), theta_objectives_epoch, max_converged)
+
+
+def run_erica_optimization(theta_hatL, theta_hatH, initial_theta,
+                     epsilon, delta, lambda_L, lambda_H, lambda_param_L, lambda_param_H, 
+                     xavier, project_onto_gelbrich, eta_min, eta_max, max_iter, num_steps_min, num_steps_max, proximal_grad,
+                     tol, seed, robust_L, robust_H, grad_clip, plot_steps, plot_epochs, display_results):
+    
+    torch.manual_seed(seed) 
+
+    # Start timing
+    start_time = time.time()
+
+    if not robust_L:
+        epsilon = 0
+    if not robust_H:
+        delta = 0
+
+    erica = robust_L or robust_H
+
+    if not erica:
+        num_steps_min = 1
+    
+    if grad_clip:
+        max_grad_norm = 1.0
+    else:
+        max_grad_norm = float('inf')
+    
+    if xavier and not project_onto_gelbrich:
+        print("Forcing projection onto Gelbrich ball!")
+        project_onto_gelbrich = True
+    
+    max_converged = False
+    
+    mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H = get_initialization(theta_hatL, theta_hatH, epsilon, delta, initial_theta)
+
+    T           = torch.randn(mu_H.shape[0], mu_L.shape[0], requires_grad=True)
+    optimizer_T = torch.optim.Adam([T], lr=eta_min, eps=1e-8, amsgrad=True)
+    condition_num_list = []
+    condition_num_list.append(evut.condition_number(T.detach().numpy()))
+    previous_objective = float('inf') 
+    epoch_objectives   = {'T_objectives_overall': [], 'theta_objectives_overall': []}
+    for epoch in tqdm(range(max_iter)): 
+        
+        inner_loop_objectives = {'min_objectives': [], 'max_objectives': []}
+        
+        # Minimize T
+        T_new, objective_T, T_objectives_epoch = optimize_min(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels,
+                                                              lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
+                                                            epsilon, delta, num_steps_min, optimizer_T, max_grad_norm, seed, xavier=xavier)
+
+        #condition_num_list.append(evut.condition_number(T_new.detach().numpy()))
+        inner_loop_objectives['min_objectives'] = T_objectives_epoch
+        epoch_objectives['T_objectives_overall'].append(objective_T)
+
+        # Maximize μ, Σ
+        if erica and not max_converged:  
+            if proximal_grad:
+                mu_L, Sigma_L, mu_H, Sigma_H, obj_theta, theta_objectives_epoch, max_converged = optimize_max_proxgrad(T_new, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels,
+                                                                                                        hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
+                                                                                                        lambda_L, lambda_H, lambda_param_L, lambda_param_H,
+                                                                                                        eta_max, num_steps_max, epsilon, delta, seed
+                                                                                                        )
+            else:
+                mu_L, Sigma_L, mu_H, Sigma_H, obj_theta, theta_objectives_epoch, max_converged = optimize_max(
+                                                                                                T_new, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels,
+                                                                                                hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
+                                                                                                lambda_L, lambda_H, lambda_param_L, lambda_param_H,
+                                                                                                eta_max, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, max_grad_norm
+                                                                                              )
+            
+            if max_converged:
+                num_steps_min = 1
+                print(f"Max converged at epoch {epoch+1}")
+            # Store objectives
+            inner_loop_objectives['max_objectives'] = theta_objectives_epoch
+            epoch_objectives['theta_objectives_overall'].append(obj_theta)
+    
+        if plot_steps:
+            plot_inner_loop_objectives(inner_loop_objectives, epoch, erica)
+        
+        # Check convergence
+        criterion = abs(previous_objective - objective_T.item()) 
+        if criterion < tol:
+            print(f"Convergence reached at epoch {epoch+1} with objective {objective_T.item()}")
+            break
+        
+        
+        T                  = T_new
+        previous_objective = objective_T.item()
+
+    if plot_epochs:
+        plot_epoch_objectives(epoch_objectives, erica)
+
+    paramsL      = {'mu_U': mu_L.detach().numpy(), 'Sigma_U': Sigma_L.detach().numpy(), 'radius': epsilon}
+    paramsH      = {'mu_U': mu_H.detach().numpy(), 'Sigma_U': Sigma_H.detach().numpy(), 'radius': delta}
+    T            = T.detach().numpy()
+    end_time     = time.time()
+    elapsed_time = end_time - start_time
+
+    if display_results == True:
+        print_results(T, paramsL, paramsH, elapsed_time)
+
+    return paramsL, paramsH, T, inner_loop_objectives, epoch_objectives, condition_num_list
+
+
 
 #======================= EMPIRICA OPTIMISATION =======================
 
