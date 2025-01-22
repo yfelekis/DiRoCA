@@ -344,6 +344,40 @@ def project_onto_gelbrich_ball(mu, Sigma, hat_mu, hat_Sigma, epsilon, max_iter=1
     
     return mu, Sigma
 
+def get_gelbrich_boundary(mu, Sigma, hat_mu, hat_Sigma, epsilon, max_iter=100, tol=1e-6):
+    """
+    Find a point exactly on the boundary of the Gelbrich ball where
+    (||μ₁-μ₂||² + ||Σ₁^(1/2) - Σ₂^(1/2)||²) = epsilon²
+    """
+    for i in range(max_iter):
+        mu_dist_sq     = torch.sum((mu - hat_mu)**2)
+        Sigma_sqrt     = sqrtm_svd(Sigma)
+        hat_Sigma_sqrt = sqrtm_svd(hat_Sigma)
+        Sigma_dist_sq  = torch.sum((Sigma_sqrt - hat_Sigma_sqrt)**2)
+        
+        G_squared      = mu_dist_sq + Sigma_dist_sq
+        
+        # Calculate how far we are from the boundary
+        diff = abs(G_squared - epsilon**2)
+        
+        if diff <= tol:
+            #print(f"Found boundary point in {i+1} iterations with G_squared = {G_squared.item()}")
+            break
+            
+        # Scale to exactly reach the boundary
+        scale = epsilon / torch.sqrt(G_squared)
+        
+        mu         = hat_mu + scale * (mu - hat_mu)
+        Sigma_diff = Sigma_sqrt - hat_Sigma_sqrt
+        Sigma_sqrt = hat_Sigma_sqrt + scale * Sigma_diff
+        Sigma      = torch.matmul(Sigma_sqrt, Sigma_sqrt.T)
+    
+    final_G_squared = torch.sum((mu - hat_mu)**2) + torch.sum((sqrtm_svd(Sigma) - hat_Sigma_sqrt)**2)
+    if abs(final_G_squared - epsilon**2) > tol:
+        print(f"Warning: Final G_squared = {final_G_squared.item()} ≠ {epsilon**2}")
+    
+    return mu, Sigma
+
 def verify_gelbrich_constraint(mu, Sigma, hat_mu, hat_Sigma, radius):
     """
     Verify constraint
@@ -365,50 +399,8 @@ def verify_gelbrich_constraint(mu, Sigma, hat_mu, hat_Sigma, radius):
     return G_squared <= radius_squared, G_squared, radius_squared
 
 
-def compute_objective_value_old(T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H):
-    """
-    Compute the terms of the Wasserstein objective function.
-    
-    Args:
-        T: Transformation matrix
-        L_i: Low-level structural matrix
-        H_i: High-level structural matrix
-        mu_L: Low-level mean
-        mu_H: High-level mean
-        Sigma_L: Low-level covariance
-        Sigma_H: High-level covariance
-        
-    Returns:
-        val: Value of the objective function
-    """
-
-    # Convert all inputs to float32 (torch.float)
-    T = T.float()
-    L_i = L_i.float()
-    H_i = H_i.float()
-    mu_L = mu_L.float()
-    mu_H = mu_H.float()
-    Sigma_L = Sigma_L.float()
-    Sigma_H = Sigma_H.float()
-
-    L_i_mu_L     = L_i @ mu_L
-    H_i_mu_H     = H_i @ mu_H
-    term1        = torch.norm(T @ L_i_mu_L - H_i_mu_H) ** 2
-    
-    TL_Sigma_LLT = regmat(T @ L_i @ Sigma_L @ L_i.T @ T.T)
-    term2        = torch.trace(TL_Sigma_LLT)
-
-    H_Sigma_HH   = regmat(H_i @ Sigma_H @ H_i.T)
-    term3        = torch.trace(H_Sigma_HH)
-
-    term4       = -2 * torch.trace(sqrtm_svd(sqrtm_svd(TL_Sigma_LLT) @ H_Sigma_HH @ sqrtm_svd(TL_Sigma_LLT)))
-    
-    val         = term1 + term2 + term3 + term4
-
-    return val
-
 def compute_objective_value(T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H, 
-                            lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H, epsilon, delta):
+                            lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H, epsilon, delta, project_onto_gelbrich):
     """
     Compute the terms of the Wasserstein objective function, including regularization terms.
     
@@ -468,11 +460,16 @@ def compute_objective_value(T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H,
     reg_L    = lambda_L * (torch.norm(mu_L - hat_mu_L) ** 2 + torch.norm(Sigma_L_sqrt - hat_Sigma_L_sqrt, p='fro') ** 2 - epsilon**2)
     reg_H    = lambda_H * (torch.norm(mu_H - hat_mu_H) ** 2 + torch.norm(Sigma_H_sqrt - hat_Sigma_H_sqrt, p='fro') ** 2 - delta**2)
 
-    #penalty_term = (reg_L - epsilon**2)**2 + (reg_H - delta**2)**2
     # Total value
-    val = term1 + term2 + term3 + term4 + reg_L + reg_H #+ penalty_term
+    if project_onto_gelbrich:
+        val = term1 + term2 + term3 + term4
+
+    else:
+        val = term1 + term2 + term3 + term4 + reg_L + reg_H 
 
     return val
+
+
 
 def get_initialization(theta_hatL, theta_hatH, epsilon, delta, initial_theta):
     hat_mu_L, hat_Sigma_L = torch.from_numpy(theta_hatL['mu_U']).float(), torch.from_numpy(theta_hatL['Sigma_U']).float()
@@ -506,7 +503,13 @@ def get_initialization(theta_hatL, theta_hatH, epsilon, delta, initial_theta):
     return mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H
 
 
+
+
+
+
 #======================= BARYCENTRIC OPTIMISATION =======================
+
+
 def create_psd_matrix(size):
     A = torch.randn(size, size).float()
 
@@ -751,6 +754,9 @@ def barycentric_optimization(theta_L, theta_H, LLmodels, HLmodels, Ill, Ihl, pro
         print_results(T, paramsL, paramsH, elapsed_time)
 
     return paramsL, paramsH, T
+
+
+
 
 #======================= GELBRICH OPTIMISATION =======================
 

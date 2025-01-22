@@ -6,7 +6,7 @@ from sklearn.mixture import GaussianMixture
 from scipy.linalg import sqrtm
 import seaborn as sns
 import modularised_utils as mut
-import operations as oput
+import opt_utils as oput
 
 def condition_number(matrix):
     """
@@ -149,40 +149,57 @@ def plot_abstraction_error(abstraction_error_dict, spacing_factor=0.2):
     """
     Plot abstraction errors with error bars using Seaborn.
     """
-    
     # Extract data from dictionary
     methods = list(abstraction_error_dict.keys())
     means = [v[0] for v in abstraction_error_dict.values()]
     errors = [v[1] for v in abstraction_error_dict.values()]
     
-    # Set style
+    # Calculate width first
+    width = max(4, len(methods) * spacing_factor)
+    
+    # Set style and font sizes with LaTeX
     sns.set_style("whitegrid")
+    plt.rcParams.update({
+        'text.usetex': True,
+        'font.family': 'serif',
+        'font.serif': ['Computer Modern Roman'],
+        'font.size': 14,
+        'axes.titlesize': 16,
+        'axes.labelsize': 14,
+        'xtick.labelsize': 10,
+        'ytick.labelsize': 10,
+        'xtick.color': 'black',
+        'ytick.color': 'black',
+        'figure.dpi': 300,  # Increase DPI
+        'savefig.dpi': 300,  # Increase saving DPI
+        'figure.figsize': (width, 5),
+        'figure.facecolor': 'white',
+        'figure.edgecolor': 'white',
+        'text.antialiased': True,
+        'axes.linewidth': 0.5
+    })
     
-    # Create figure
-    width = max(4, len(methods) * spacing_factor)  # Adjust width based on number of methods
-    plt.figure(figsize=(width, 5))
+    # Create figure with higher quality
+    plt.figure(figsize=(width, 5), dpi=100)
     
-    # Create error bar plot
     sns.scatterplot(
         x=range(len(methods)),
         y=means,
         color='purple',
-        s=100
+        s=60
     )
     
-    # Add error bars
     plt.errorbar(
         x=range(len(methods)),
         y=means,
         yerr=errors,
         fmt='none',
         color='green',
-        capsize=5,
+        capsize=7,
         capthick=2,
-        elinewidth=2
+        elinewidth=1
     )
     
-    # Customize plot with tighter spacing
     plt.yscale('log')
     plt.xticks(
         range(len(methods)),
@@ -191,16 +208,13 @@ def plot_abstraction_error(abstraction_error_dict, spacing_factor=0.2):
         ha='right'
     )
     
-    # Adjust margins to bring labels closer
-    plt.margins(x=0.1)  # Reduce horizontal margins
+    plt.margins(x=0.1)
     
-    plt.title('Abstraction Error by Method')
-    plt.xlabel('Method')
-    plt.ylabel('Error')
+    plt.title('')
+    plt.xlabel(r'Method')
+    plt.ylabel(r'$e(T)$')
     
-    # Adjust layout with tighter spacing
-    plt.tight_layout(pad=1.0)  # Reduce padding
-    
+    plt.tight_layout(pad=1.0)
     plt.show()
     
     return
@@ -213,12 +227,33 @@ def plot_condition_nums(cn_dict, spacing_factor=0.2):
     methods = list(cn_dict.keys())
     condition_number = [v for v in cn_dict.values()]
     
-    # Set style
-    sns.set_style("whitegrid")
-    
-    # Create figure with adjusted width
+    # Calculate width first
     width = max(4, len(methods) * spacing_factor)
-    plt.figure(figsize=(width, 5))
+    
+    # Set style and font sizes with LaTeX
+    sns.set_style("whitegrid")
+    plt.rcParams.update({
+        'text.usetex': True,
+        'font.family': 'serif',
+        'font.serif': ['Computer Modern Roman'],
+        'font.size': 14,
+        'axes.titlesize': 16,
+        'axes.labelsize': 14,
+        'xtick.labelsize': 10,
+        'ytick.labelsize': 10,
+        'xtick.color': 'black',
+        'ytick.color': 'black',
+        'figure.dpi': 300,  # Increase DPI
+        'savefig.dpi': 300,  # Increase saving DPI
+        'figure.figsize': (width, 5),
+        'figure.facecolor': 'white',
+        'figure.edgecolor': 'white',
+        'text.antialiased': True,
+        'axes.linewidth': 0.5
+    })
+    
+    # Create figure with higher quality
+    plt.figure(figsize=(width, 5), dpi=100)
     
     # Create scatter plot
     sns.scatterplot(
@@ -250,9 +285,9 @@ def plot_condition_nums(cn_dict, spacing_factor=0.2):
     )
     
     plt.margins(x=0.1)
-    plt.title('Condition Number by Method')
-    plt.xlabel('Method')
-    plt.ylabel('Condition Number')
+    plt.title('')  # Removed title as in previous function
+    plt.xlabel(r'Method')
+    plt.ylabel(r'$\kappa(T)$')  # Using LaTeX for condition number symbol
     
     plt.tight_layout(pad=1.0)
     plt.show()
@@ -323,10 +358,7 @@ def generate_noise(data, noise_type, level, experiment, normalize, random_range=
     n_samples, n_vars = data.shape
     
     if noise_type in ['gelbrich_gaussian', 'boundary_gaussian', 'rand_epsilon_delta']:
-
         params = mut.load_type_to_params(experiment, noise_type, level)
-
-       #params = type_to_params[noise_type][level]
                 
     if noise_type == 'gelbrich_gaussian':
 
