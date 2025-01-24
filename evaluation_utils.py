@@ -7,6 +7,7 @@ from scipy.linalg import sqrtm
 import seaborn as sns
 import modularised_utils as mut
 import opt_utils as oput
+import operations as ops
 
 def condition_number(matrix):
     """
@@ -455,8 +456,11 @@ def generate_pertubation(data, pert_type, pert_level, experiment):
     elif pert_type == 'boundary':
         P = boundary_matrix
 
-    elif pert_type == 'random':
+    elif pert_type == 'random_normal':
         P = np.random.randn(N, n)
+        
+    elif pert_type == 'random_uniform':
+        P = np.random.rand(N, n)
 
     return P
 
@@ -472,5 +476,22 @@ def compute_abstraction_error(T, base, abst, metric):
         #dist = 1 - np.exp(-dist)
     elif metric == 'js':
         dist = mut.compute_jensenshannon(tau_base, abst)
+
+    return dist
+
+def compute_empirical_distance(tbase, abst, metric):
+
+    if metric == 'fro':
+        dist     = ops.MatrixDistances.frobenius_distance(tbase, abst)
+    elif metric == 'sq_fro':
+        dist     = ops.MatrixDistances.squared_frobenius_distance(tbase, abst)
+    elif metric == 'nuclear':
+        dist     = ops.MatrixDistances.nuclear_norm_distance(tbase, abst)
+    elif metric == 'spectral':
+        dist     = ops.MatrixDistances.spectral_norm_distance(tbase, abst)
+    elif metric == 'l1':
+        dist     = ops.MatrixDistances.l1_distance(tbase, abst)    
+    else:
+        raise ValueError(f"Invalid metric: {metric}")
 
     return dist
