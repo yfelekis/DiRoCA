@@ -355,7 +355,7 @@ def plot_distribution_changes(original, modified, title="Distribution Changes"):
     plt.tight_layout()
     plt.show()
 
-def generate_noise(data, noise_type, level, experiment, normalize, random_range=None, rad=None):
+def generate_noise(data, noise_type, form, level, experiment, normalize, random_range=None, rad=None):
     n_samples, n_vars = data.shape
     
     if noise_type in ['gelbrich_gaussian', 'boundary_gaussian', 'rand_epsilon_delta']:
@@ -443,8 +443,12 @@ def generate_noise(data, noise_type, level, experiment, normalize, random_range=
     # Normalize noise to have similar scale
     if normalize == True:
         noise = noise / np.std(noise, axis=0)
+
+    if form == 'sample':
+        return noise
     
-    return noise
+    elif form == 'distributional':
+        return noise_mu, noise_Sigma
 
 def generate_pertubation(data, pert_type, pert_level, experiment):
     N, n = data.shape
@@ -495,3 +499,46 @@ def compute_empirical_distance(tbase, abst, metric):
         raise ValueError(f"Invalid metric: {metric}")
 
     return dist
+
+def generate_data(LLmodels, HLmodels, omega, num_llsamples, num_hlsamples, mu_U_ll_hat, Sigma_U_ll_hat, mu_U_hl_hat, Sigma_U_hl_hat):
+    """
+    Generates data for the linear additive noise SCMs.
+    """
+    Ill = list(LLmodels.keys())
+    Ihl = list(HLmodels.keys())
+    dbase = {}
+    for iota in Ill:
+        lenv_iota   = mut.sample_distros_Gelbrich([(mu_U_ll_hat, Sigma_U_ll_hat)])[0] 
+        noise_iota  = lenv_iota.sample(num_llsamples)[0]
+        dbase[iota] = LLmodels[iota].simulate(noise_iota, iota)
+
+    dabst = {}
+    for eta in Ihl:
+        henv_eta   = mut.sample_distros_Gelbrich([(mu_U_hl_hat, Sigma_U_hl_hat)])[0] 
+        noise_eta  = henv_eta.sample(num_hlsamples)[0]
+        dabst[eta] = HLmodels[eta].simulate(noise_eta, eta)
+
+    data = {}
+    for iota in Ill:
+        data[iota] = (dbase[iota], dabst[omega[iota]])
+
+    return data
+
+
+def generate_empirical_data(LLmodels, HLmodels, omega, U_L, U_H):
+    Ill = list(LLmodels.keys())
+    Ihl = list(HLmodels.keys())
+   
+    dbase = {}
+    for iota in Ill:
+        dbase[iota] = U_L @ LLmodels[iota].F
+
+    dabst = {}
+    for eta in Ihl:
+        dabst[eta] = U_H @ HLmodels[eta].F
+
+    data = {}
+    for iota in Ill:
+        data[iota] = (dbase[iota], dabst[omega[iota]])
+
+    return data
