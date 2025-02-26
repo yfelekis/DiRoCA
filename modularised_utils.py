@@ -533,6 +533,30 @@ def get_coefficients(data_list, G, weights=None, use_ridge=False, alpha=1.0):
             
     return coeffs
 
+def get_coefficients_with_known_noise(data, noise, G):
+    """
+    Estimate coefficients when noise terms are known.
+    This gives exact solutions since X = BX + U becomes a determined system.
+    """
+    nodes = list(G.nodes)
+    coeffs = {}
+    
+    for node in nx.topological_sort(G):
+        node_idx = nodes.index(node)
+        parents = list(G.predecessors(node))
+        
+        if parents:
+            y = data[:, node_idx] - noise[:, node_idx]  # Subtract known noise
+            X = data[:, [nodes.index(p) for p in parents]]
+            
+            # Now we're fitting X = BX exactly (no error term)
+            model = LinearRegression(fit_intercept=False)
+            model.fit(X, y)
+            
+            for parent, coef in zip(parents, model.coef_):
+                coeffs[(parent, node)] = coef
+                
+    return coeffs
 # ######################## KEEP THIS! ########################
 # def get_coefficients(data, G):
 #     """
@@ -658,8 +682,8 @@ def lan_abduction(data, G, coeffs):
             noise[:, idx] = data[:, idx] - predicted
     
     # Compute statistics
-    mean = np.mean(noise, axis=0)
-    var = np.var(noise, axis=0)
+    mean = np.mean(noise, axis=0).round(3)
+    var = np.var(noise, axis=0).round(3)
     cov = np.diag(var)  # Assuming independent noise
     
     return noise, mean, cov

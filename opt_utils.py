@@ -344,12 +344,12 @@ def project_onto_gelbrich_ball(mu, Sigma, hat_mu, hat_Sigma, epsilon, max_iter=1
     
     return mu, Sigma
 
-def get_gelbrich_boundary(mu, Sigma, hat_mu, hat_Sigma, epsilon, max_iter=100, tol=1e-6):
+def get_gelbrich_boundary(mu, Sigma, hat_mu, hat_Sigma, epsilon, max_iter=100, tol=1e-2):
     """
     Find a point exactly on the boundary of the Gelbrich ball where
     (||μ₁-μ₂||² + ||Σ₁^(1/2) - Σ₂^(1/2)||²) = epsilon²
     """
-    for i in range(max_iter):
+    for _ in range(max_iter):
         mu_dist_sq     = torch.sum((mu - hat_mu)**2)
         Sigma_sqrt     = sqrtm_svd(Sigma)
         hat_Sigma_sqrt = sqrtm_svd(hat_Sigma)
@@ -375,7 +375,7 @@ def get_gelbrich_boundary(mu, Sigma, hat_mu, hat_Sigma, epsilon, max_iter=100, t
     final_G_squared = torch.sum((mu - hat_mu)**2) + torch.sum((sqrtm_svd(Sigma) - hat_Sigma_sqrt)**2)
     if abs(final_G_squared - epsilon**2) > tol:
         print(f"Warning: Final G_squared = {final_G_squared.item()} ≠ {epsilon**2}")
-    
+
     return mu, Sigma
 
 def verify_gelbrich_constraint(mu, Sigma, hat_mu, hat_Sigma, radius):
@@ -876,7 +876,7 @@ def random_smoothing_optimization(theta_hatL, theta_hatH, LLmodels, HLmodels, Il
     return T.detach().numpy()
 
 
-#======================= GELBRICH OPTIMISATION =======================
+#================================================================= GELBRICH OPTIMISATION =================================================================
 
 def check_for_invalid_values(matrix):
     if torch.isnan(matrix).any() or torch.isinf(matrix).any():

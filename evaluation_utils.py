@@ -355,12 +355,12 @@ def plot_distribution_changes(original, modified, title="Distribution Changes"):
     plt.tight_layout()
     plt.show()
 
-def generate_noise(data, noise_type, form, level, experiment, normalize, random_range=None, rad=None):
-    n_samples, n_vars = data.shape
+def generate_noise(shape, noise_type, form, level, experiment, normalize, rad=None):
+    n_samples, n_vars = shape
     
-    if noise_type in ['gelbrich_gaussian', 'boundary_gaussian', 'rand_epsilon_delta']:
+    if noise_type in ['gelbrich_gaussian', 'boundary_gaussian', 'rand_epsilon_delta', 'gelbrich_boundary_gaussian']:
         params = mut.load_type_to_params(experiment, noise_type, level)
-                
+            
     if noise_type == 'gelbrich_gaussian':
 
         mu_U_hat    = params['mu_U'] #+ np.ones(params_Lerica['mu_U'].shape[0])
@@ -373,7 +373,7 @@ def generate_noise(data, noise_type, form, level, experiment, normalize, random_
                                         Sigma_hat=Sigma_U_hat, 
                                         bound=radius, 
                                         num_envs=1
-                                        )
+                                      )
         
         noise_mu, noise_Sigma = moments[0]
 
@@ -396,6 +396,7 @@ def generate_noise(data, noise_type, form, level, experiment, normalize, random_
         mu_U_hat    = params['mu_U'] #+ np.ones(params_Lerica['mu_U'].shape[0])
         Sigma_U_hat = params['Sigma_U'] #+ np.random.normal(0, 0.1, size=params_Lerica['Sigma_U'].shape)
         radius      = rad
+        
 
         # Sample moments from Gelbrich ball
         moments = mut.sample_moments_U(
@@ -406,6 +407,28 @@ def generate_noise(data, noise_type, form, level, experiment, normalize, random_
                                         )
         
         noise_mu, noise_Sigma = moments[0]
+
+        noise = np.random.multivariate_normal(
+                                                mean=noise_mu, 
+                                                cov=noise_Sigma, 
+                                                size=n_samples
+                                                )
+        
+    elif noise_type == 'gelbrich_boundary_gaussian':
+
+        mu_U_hat    = params['mu_U'] #+ np.ones(params_Lerica['mu_U'].shape[0])
+        Sigma_U_hat = params['Sigma_U'] #+ np.random.normal(0, 0.1, size=params_Lerica['Sigma_U'].shape)
+        radius      = rad
+        random_mu   = np.random.randn(n_vars)
+        random_Sigma = np.diag(np.random.rand(n_vars))
+
+        # Convert to PyTorch tensors before calling get_gelbrich_boundary
+        random_mu_tensor = torch.tensor(random_mu, dtype=torch.float32)
+        random_Sigma_tensor = torch.tensor(random_Sigma, dtype=torch.float32)
+        mu_U_hat_tensor = torch.tensor(mu_U_hat, dtype=torch.float32)
+        Sigma_U_hat_tensor = torch.tensor(Sigma_U_hat, dtype=torch.float32)
+
+        noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu_tensor, random_Sigma_tensor, mu_U_hat_tensor, Sigma_U_hat_tensor, radius)
         
         noise = np.random.multivariate_normal(
                                                 mean=noise_mu, 
@@ -428,7 +451,7 @@ def generate_noise(data, noise_type, form, level, experiment, normalize, random_
         noise = noise - 1  # Center to mean 0
     
     elif noise_type == 'random_normal':
-        low, high = random_range
+        low, high = (-2, 2)
         noise_mu = np.random.uniform(low=low, high=high, size=n_vars)
         noise_Sigma = np.diag(np.random.uniform(0, high, size=n_vars))
 
