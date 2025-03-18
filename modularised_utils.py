@@ -389,13 +389,15 @@ def sample_moments_U(mu_hat, Sigma_hat, bound, mu_method = 'perturbation', Sigma
     samples = [] # To store multiple samples
     
     while len(samples) < num_envs:
-        for _ in range(max_attempts):
-            
+        num_attempts = 0
+        for i in range(max_attempts):
+            num_attempts += 1
             mu    = sample_meanvec(mu_hat, mu_scale, mu_method)
             Sigma = sample_covariance(Sigma_hat, bound, Sigma_method, Sigma_scale)
-                               
             # 3. Check if the new mean and covariance satisfy the Wasserstein distance constraint
             if compute_wasserstein(mu_hat, Sigma_hat, mu, Sigma) <= bound**2:
+                #print(f"wasserstein in: {compute_wasserstein(mu_hat, Sigma_hat, mu, Sigma)}")
+                #print(f"num_attempts: {num_attempts}")
                 samples.append((mu, Sigma))
                 #environments.append(Environment('gaussian', (mu, Sigma), dag))
                 break
@@ -1079,6 +1081,18 @@ def load_type_to_params(experiment, noise_type, level):
     type_to_params_dict = joblib.load(f'data/{experiment}/type_to_params.pkl')
     return type_to_params_dict[noise_type][level]
 
+def load_optimization_params(experiment, level, method='erica'):
+    save_dir = f"data/{experiment}/{method}"
+    try:
+        opt_params = joblib.load(f"{save_dir}/opt_params.pkl")
+        params_L, params_H = opt_params['L'], opt_params['H']
+
+        return {'L': params_L, 'H': params_H}[level]
+       
+    except FileNotFoundError:
+        print(f"No saved parameters found in {save_dir}/opt_params.pkl")
+        return None, None
+    
 def load_empirical_boundary_params(experiment, pert_level):
     return joblib.load(f'data/{experiment}/empirical_boundary_params.pkl')[pert_level]
 

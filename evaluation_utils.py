@@ -9,6 +9,29 @@ import modularised_utils as mut
 import opt_utils as oput
 import operations as ops
 
+def compute_worst_case_distance(params_worst):
+    mu_worst = params_worst['mu_U']
+    Sigma_worst = params_worst['Sigma_U']
+    mu_hat = params_worst['mu_hat']
+    Sigma_hat = params_worst['Sigma_hat']
+    radius = params_worst['radius']
+
+    mu_dist_sq     = np.sum((mu_worst - mu_hat)**2)
+
+    std_worst = np.std(Sigma_worst)
+    std_hat   = np.std(Sigma_hat)
+    std_diff  = np.sum((std_worst - std_hat)**2)
+
+    Sigma_sqrt     = oput.sqrtm_svd_np(Sigma_worst)
+    hat_Sigma_sqrt = oput.sqrtm_svd_np(Sigma_hat)
+    Sigma_dist_sq  = np.sum((Sigma_sqrt - hat_Sigma_sqrt)**2)
+    G_squared      = mu_dist_sq + Sigma_dist_sq
+    G_squared      = G_squared.item()
+    #radius_squared = round(radius**2, 5)
+    #diff = abs(G_squared - radius_squared)
+    
+    return G_squared
+
 def condition_number(matrix):
     """
     Computes the condition number of a matrix using the 2-norm.
@@ -473,6 +496,117 @@ def generate_noise(shape, noise_type, form, level, experiment, normalize, rad=No
     elif form == 'distributional':
         return noise_mu, noise_Sigma
 
+def generate_noise_fixed(n_samples, noise_type, form, level, experiment, normalize, rad=None):
+
+    params = load_optimization_params(experiment, level)
+    n_vars = params['mu_hat'].shape[0]
+
+    if noise_type == 'gelbrich_fixed_hat': # Sample moments from the Gelbrich ball centered at theta_hat
+
+        mu     = params['mu_hat'] 
+        Sigma  = params['Sigma_hat']
+        radius = params['radius']
+
+        # Sample moments from Gelbrich ball
+        noise_mu, noise_Sigma = mut.sample_moments_U(mu, Sigma, bound=radius, num_envs=1)[0]
+        
+        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+
+    elif noise_type == 'gelbrich_boundary_hat': # Sample moments from the boundary of the Gelbrich ball centered at theta_hat
+
+        mu     = params['mu_hat'] 
+        Sigma  = params['Sigma_hat'] 
+        radius = params['g_squared']
+        
+        random_mu    = np.random.randn(n_vars)
+        random_Sigma = np.diag(np.random.rand(n_vars))
+    
+        noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu, Sigma, radius)
+        
+        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+
+    elif noise_type == 'gelbrich_boundary_worst': # Sample moments from the boundary of the Gelbrich ball centered at theta_worst
+
+        mu     = params['mu_U'] 
+        Sigma  = params['Sigma_U'] 
+        radius = params['g_squared']
+        random_mu   = np.random.randn(n_vars)
+        random_Sigma = np.diag(np.random.rand(n_vars))
+    
+        noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu, Sigma, radius)
+        
+        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+
+    elif noise_type == 'gelbrich_random_hat': # Sample moments from Gelbrich ball centered at theta_hat
+        mu     = params['mu_hat'] 
+        Sigma  = params['Sigma_hat']
+        radius = rad
+
+        noise_mu, noise_Sigma = mut.sample_moments_U(mu, Sigma, bound=radius, num_envs=1)[0]
+        
+        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+    
+    elif noise_type == 'gelbrich_random_worst': # Sample moments from Gelbrich ball centered at theta_worst
+        mu     = params['mu_U'] 
+        Sigma  = params['Sigma_U']
+        radius = rad
+        
+        noise_mu, noise_Sigma = mut.sample_moments_U(mu, Sigma, bound=radius, num_envs=1)[0]
+        
+        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+
+    elif noise_type == 'boundary_fixed_worst': # Return theta_worst
+        noise_mu, noise_Sigma = params['mu_U'], params['Sigma_U']
+
+        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+
+    elif noise_type == 'gelbrich_boundary_gaussian':
+
+        mu_U_hat     = params['mu_hat'] 
+        Sigma_U_hat  = params['Sigma_hat'] 
+        radius       = params['g_squared']
+        random_mu    = np.random.randn(n_vars)
+        random_Sigma = np.diag(np.random.rand(n_vars))
+    
+        noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu_U_hat, Sigma_U_hat, radius)
+        
+        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+
+    elif noise_type == 'gelbrich_boundary_gaussian2':
+
+        mu_U_hat     = params['mu_U'] 
+        Sigma_U_hat  = params['Sigma_U'] 
+        radius       = rad
+        random_mu    = np.random.randn(n_vars)
+        random_Sigma = np.diag(np.random.rand(n_vars))
+
+
+        # Convert to PyTorch tensors before calling get_gelbrich_boundary
+        random_mu_tensor = torch.tensor(random_mu, dtype=torch.float32)
+        random_Sigma_tensor = torch.tensor(random_Sigma, dtype=torch.float32)
+        mu_U_hat_tensor = torch.tensor(mu_U_hat, dtype=torch.float32)
+        Sigma_U_hat_tensor = torch.tensor(Sigma_U_hat, dtype=torch.float32)
+
+        noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu_tensor, random_Sigma_tensor, mu_U_hat_tensor, Sigma_U_hat_tensor, radius)
+
+
+        #noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu_U_hat, Sigma_U_hat, radius)
+        
+        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+
+    else:
+        raise ValueError(f"Unknown noise type: {noise_type}")
+    
+    # Normalize noise to have similar scale
+    if normalize == True:
+        noise = noise / np.std(noise, axis=0)
+
+    if form == 'sample':
+        return noise
+    
+    elif form == 'distributional':
+        return noise_mu, noise_Sigma
+    
 def generate_pertubation(data, pert_type, pert_level, experiment):
     N, n = data.shape
     
@@ -565,3 +699,9 @@ def generate_empirical_data(LLmodels, HLmodels, omega, U_L, U_H):
         data[iota] = (dbase[iota], dabst[omega[iota]])
 
     return data
+
+def compute_empirical_worst_case_distance(params_worst):
+    pert_worst = params_worst['pert_U']
+    N          = pert_worst.shape[0]
+
+    return (1/np.sqrt(N)) * np.linalg.norm(pert_worst, 'fro') #torch.norm(pert_worst, p='fro') maybe torch different output

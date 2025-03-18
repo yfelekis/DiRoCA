@@ -1,9 +1,12 @@
 import numpy as np
 import torch
 import time
+import os
 
 import networkx as nx
 from tqdm import tqdm
+import joblib
+
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import seaborn as sns
@@ -188,9 +191,27 @@ def plot_inner_loop_objectives(inner_loop_objectives, epoch, erica=True):
     """
     sns.set_style("whitegrid")
     
-    inner_loop_objectives['min_objectives'] = np.array([t.detach().numpy() for t in inner_loop_objectives['min_objectives']])
-    inner_loop_objectives['max_objectives'] = np.array([t.detach().numpy() for t in inner_loop_objectives['max_objectives']])
+    # inner_loop_objectives['min_objectives'] = np.array([t.detach().numpy() for t in inner_loop_objectives['min_objectives']])
+    # inner_loop_objectives['max_objectives'] = np.array([t.detach().numpy() for t in inner_loop_objectives['max_objectives']])
+
+    # Convert min objectives to numpy, handling both tensor and float types
+    min_objectives = []
+    for obj in inner_loop_objectives['min_objectives']:
+        if torch.is_tensor(obj):
+            min_objectives.append(obj.detach().numpy())
+        else:
+            min_objectives.append(obj)
+    inner_loop_objectives['min_objectives'] = np.array(min_objectives)
     
+    # Convert max objectives to numpy, handling both tensor and float types
+    max_objectives = []
+    for obj in inner_loop_objectives['max_objectives']:
+        if torch.is_tensor(obj):
+            max_objectives.append(obj.detach().numpy())
+        else:
+            max_objectives.append(obj)
+    inner_loop_objectives['max_objectives'] = np.array(max_objectives)
+
     plt.figure(figsize=(10, 6))
     if erica:
         # Create figure with two subplots
@@ -339,16 +360,30 @@ def project_onto_gelbrich_ball(mu, Sigma, hat_mu, hat_Sigma, epsilon, max_iter=1
         
        
     final_G_squared = torch.sum((mu - hat_mu)**2) + torch.sum((sqrtm_svd(Sigma) - hat_Sigma_sqrt)**2)
+    #print(f"difference: {final_G_squared.item() - epsilon**2}")
     if final_G_squared > epsilon**2 + tol:
         print(f"Warning: Final G_squared = {final_G_squared.item()} > {epsilon**2}")
     
     return mu, Sigma
 
+# Convert inputs to torch tensors and float32 if needed
+def to_torch_float(x):
+    if not isinstance(x, torch.Tensor):
+        return torch.tensor(x, dtype=torch.float32)
+    return x.float()
+    
 def get_gelbrich_boundary(mu, Sigma, hat_mu, hat_Sigma, epsilon, max_iter=100, tol=1e-2):
     """
     Find a point exactly on the boundary of the Gelbrich ball where
     (||μ₁-μ₂||² + ||Σ₁^(1/2) - Σ₂^(1/2)||²) = epsilon²
     """
+
+    mu        = to_torch_float(mu)
+    Sigma     = to_torch_float(Sigma)
+    hat_mu    = to_torch_float(hat_mu)
+    hat_Sigma = to_torch_float(hat_Sigma)
+    epsilon   = to_torch_float(epsilon)
+
     for _ in range(max_iter):
         mu_dist_sq     = torch.sum((mu - hat_mu)**2)
         Sigma_sqrt     = sqrtm_svd(Sigma)
@@ -941,9 +976,9 @@ def compute_grad_Sigma_L_half(T, Sigma_L, LLmodels, omega, lambda_L, hat_Sigma_L
     
     return grad_Sigma_L
 
-def compute_grad_Sigma_H_half(T, Sigma_H, HLmodels, omega, lambda_H, hat_Sigma_H):
+def compute_grad_Sigma_H_half(T, Sigma_H, LLmodels, HLmodels, omega, lambda_H, hat_Sigma_H):
 
-    Ill = list(HLmodels.keys())
+    Ill = list(LLmodels.keys())
     sum_term            = torch.zeros_like(Sigma_H)
     for n, iota in enumerate(Ill):
         H_i          = torch.from_numpy(HLmodels[omega[iota]].F).float()
@@ -1093,7 +1128,7 @@ def optimize_max(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega, hat
         grad_mu_L = compute_grad_mu_L(cur_T, mu_L, mu_H, LLmodels, HLmodels, omega, lambda_L, hat_mu_L)
         grad_mu_H = compute_grad_mu_H(cur_T, mu_L, mu_H, LLmodels, HLmodels, omega, lambda_H, hat_mu_H)
         grad_Sigma_L = compute_grad_Sigma_L_half(cur_T, Sigma_L, LLmodels, omega, lambda_L, hat_Sigma_L)
-        grad_Sigma_H = compute_grad_Sigma_H_half(cur_T, Sigma_H, HLmodels, omega, lambda_H, hat_Sigma_H)
+        grad_Sigma_H = compute_grad_Sigma_H_half(cur_T, Sigma_H, LLmodels, HLmodels, omega, lambda_H, hat_Sigma_H)
 
         # Clip gradients
         if max_grad_norm < float('inf'):
@@ -1153,7 +1188,7 @@ def optimize_max(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega, hat
             satisfied_L, dist_L, epsi = verify_gelbrich_constraint(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
             satisfied_H, dist_H, delt = verify_gelbrich_constraint(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
             
-            constraints_error_check(satisfied_L, dist_L, epsi, satisfied_H, dist_H, delt)
+            #constraints_error_check(satisfied_L, dist_L, epsi, satisfied_H, dist_H, delt)
 
         objective_iota = 0
         for iota in Ill:
@@ -1220,6 +1255,7 @@ def optimize_max_proxgrad(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, o
         
         # Store objective value
         theta_objectives_epoch.append(-objective.item())
+        #theta_objectives_epoch.append(objective.item())
 
         # Backward pass
         objective.backward()
@@ -1248,34 +1284,46 @@ def optimize_max_proxgrad(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, o
 
     return (mu_L.detach(), Sigma_L.detach(), mu_H.detach(), Sigma_H.detach(), objective.detach(), theta_objectives_epoch, max_converged)
 
+def compute_worst_case_distance(mu_worst, Sigma_worst, params_hat):
+
+    mu_hat = params_hat['mu_U']
+    Sigma_hat = params_hat['Sigma_U']
+    radius = params_hat['radius']
+    
+    mu_hat = torch.tensor(mu_hat, dtype=torch.float32) if not torch.is_tensor(mu_hat) else mu_hat
+    Sigma_hat = torch.tensor(Sigma_hat, dtype=torch.float32) if not torch.is_tensor(Sigma_hat) else Sigma_hat
+    
+
+    mu_dist_sq     = torch.sum((mu_worst - mu_hat)**2)
+
+    Sigma_sqrt     = sqrtm_svd(Sigma_worst)
+    hat_Sigma_sqrt = sqrtm_svd(Sigma_hat)
+    Sigma_dist_sq  = torch.sum((Sigma_sqrt - hat_Sigma_sqrt)**2)
+    G_squared      = mu_dist_sq + Sigma_dist_sq
+    G_squared = G_squared.item()
+    radius_squared = round(radius**2, 5)
+    
+    diff = abs(G_squared - radius_squared)
+    print(f"G_squared: {G_squared}, radius_squared: {radius_squared}, diff: {diff}, constraint satisfied: {G_squared <= radius_squared}")
+    return #diff, G_squared
+
+
 def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmodels, omega, lambda_L, lambda_H, lambda_param_L, lambda_param_H, 
                      xavier, project_onto_gelbrich, eta_min, eta_max, max_iter, num_steps_min, num_steps_max, proximal_grad,
-                     tol, seed, robust_L, robust_H, grad_clip, plot_steps, plot_epochs, display_results):
+                     tol, seed, robust_L, robust_H, grad_clip, plot_steps, plot_epochs, display_results, experiment):
     
     torch.manual_seed(seed) 
 
     # Start timing
     start_time = time.time()
 
-    if not robust_L:
-        epsilon = 0
-    else:
-        epsilon = theta_hatL['radius']
-
-    if not robust_H:
-        delta = 0
-    else:
-        delta = theta_hatH['radius']
+    epsilon = theta_hatL['radius'] if robust_L else 0
+    delta   = theta_hatH['radius'] if robust_H else 0
     
-    erica = robust_L or robust_H
-
-    if not erica:
-        num_steps_min = 1
+    method  = 'erica' if robust_L or robust_H else 'enrico'
     
-    if grad_clip:
-        max_grad_norm = 1.0
-    else:
-        max_grad_norm = float('inf')
+    num_steps_min = 1 if method == 'enrico' else num_steps_min
+    max_grad_norm = 1.0 if grad_clip else float('inf')
     
     if xavier and not project_onto_gelbrich:
         print("Forcing projection onto Gelbrich ball!")
@@ -1305,28 +1353,37 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
         epoch_objectives['T_objectives_overall'].append(objective_T)
 
         # Maximize μ, Σ
-        if erica and not max_converged:  
+        if method == 'erica' and not max_converged:  
             if proximal_grad:
                 mu_L, Sigma_L, mu_H, Sigma_H, obj_theta, theta_objectives_epoch, max_converged = optimize_max_proxgrad(T_new, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
-                                                                                                        hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
-                                                                                                        lambda_L, lambda_H, lambda_param_L, lambda_param_H,
-                                                                                                        eta_max, num_steps_max, epsilon, delta, seed, project_onto_gelbrich
-                                                                                                        )
+                                                                                                                    hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
+                                                                                                                    lambda_L, lambda_H, lambda_param_L, lambda_param_H,
+                                                                                                                    eta_max, num_steps_max, epsilon, delta, seed, project_onto_gelbrich
+                                                                                                                    )
+
             else:
                 mu_L, Sigma_L, mu_H, Sigma_H, obj_theta, theta_objectives_epoch, max_converged = optimize_max(
-                                                                                                T_new, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
-                                                                                                hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
-                                                                                                lambda_L, lambda_H, lambda_param_L, lambda_param_H,
-                                                                                                eta_max, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, max_grad_norm
-                                                                                              )
-            # if project_onto_gelbrich:
-            #     mu_L, Sigma_L = oput.project_onto_gelbrich_ball(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
-            #     mu_H, Sigma_H = oput.project_onto_gelbrich_ball(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
+                                                                                                            T_new, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
+                                                                                                            hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
+                                                                                                            lambda_L, lambda_H, lambda_param_L, lambda_param_H,
+                                                                                                            eta_max, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, max_grad_norm
+                                                                                                            )
 
-            # satisfied_L, dist_L, epsi = oput.verify_gelbrich_constraint(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
-            # satisfied_H, dist_H, delt = oput.verify_gelbrich_constraint(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
+            if project_onto_gelbrich:
+                mu_L, Sigma_L = project_onto_gelbrich_ball(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
+                mu_H, Sigma_H = project_onto_gelbrich_ball(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
+            #     # Compute differences
+            #     # mu_L_diff = torch.norm(mu_L - mu_L_before).item()
+            #     # Sigma_L_diff = torch.norm(Sigma_L - Sigma_L_before, p='fro').item()
+            #     # mu_H_diff = torch.norm(mu_H - mu_H_before).item()
+            #     # Sigma_H_diff = torch.norm(Sigma_H - Sigma_H_before, p='fro').item()
+
+            #     # print(f"Projection changes - μ_L: {mu_L_diff:.6f}, Σ_L: {Sigma_L_diff:.6f}, μ_H: {mu_H_diff:.6f}, Σ_H: {Sigma_H_diff:.6f}")
+            #     # print( )
+            # satisfied_L, dist_L, epsi = verify_gelbrich_constraint(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
+            # satisfied_H, dist_H, delt = verify_gelbrich_constraint(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
             
-            # oput.constraints_error_check(satisfied_L, dist_L, epsi, satisfied_H, dist_H, delt)
+            #constraints_error_check(satisfied_L, dist_L, epsi, satisfied_H, dist_H, delt)
             # if max_converged:
             #     num_steps_min = 1
             #     print(f"Max converged at epoch {epoch+1}")
@@ -1335,9 +1392,11 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
             epoch_objectives['theta_objectives_overall'].append(obj_theta)
     
         if plot_steps:
-            plot_inner_loop_objectives(inner_loop_objectives, epoch, erica)
+            plot_inner_loop_objectives(inner_loop_objectives, epoch)
         
         # Check convergence
+        # if epoch % 10 == 0:
+        #     print(f"Epoch {epoch+1}, T Objective: {objective_T.item()}")
         criterion = abs(previous_objective - objective_T.item()) 
         if criterion < tol:
             print(f"Convergence reached at epoch {epoch+1} with objective {objective_T.item()}")
@@ -1348,10 +1407,29 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
         previous_objective = objective_T.item()
 
     if plot_epochs:
-        plot_epoch_objectives(epoch_objectives, erica)
+        plot_epoch_objectives(epoch_objectives)
 
-    paramsL      = {'mu_U': mu_L.detach().numpy(), 'Sigma_U': Sigma_L.detach().numpy(), 'radius': epsilon}
-    paramsH      = {'mu_U': mu_H.detach().numpy(), 'Sigma_U': Sigma_H.detach().numpy(), 'radius': delta}
+
+    paramsL      = {'mu_U': mu_L.detach().numpy(), 'Sigma_U': Sigma_L.detach().numpy(), 'g_squared': epsilon,
+                    'mu_hat': theta_hatL['mu_U'], 'Sigma_hat': theta_hatL['Sigma_U'], 'radius': epsilon}
+    
+    paramsH      = {'mu_U': mu_H.detach().numpy(), 'Sigma_U': Sigma_H.detach().numpy(), 'g_squared': delta,
+                    'mu_hat': theta_hatH['mu_U'], 'Sigma_hat': theta_hatH['Sigma_U'], 'radius': delta}
+    
+    if method == 'erica':
+        g_squared_L          = evut.compute_worst_case_distance(paramsL)
+        paramsL['g_squared'] = np.sqrt(g_squared_L)
+
+        g_squared_H          = evut.compute_worst_case_distance(paramsH)
+        paramsH['g_squared'] = np.sqrt(g_squared_H)
+
+    opt_params = {'L': paramsL, 'H': paramsH}
+
+    save_dir = f"data/{experiment}/{method}"
+    os.makedirs(save_dir, exist_ok=True)
+
+    joblib.dump(opt_params, f"data/{experiment}/{method}/opt_params.pkl")
+
     T            = T.detach().numpy()
     end_time     = time.time()
     elapsed_time = end_time - start_time
@@ -1359,7 +1437,7 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
     if display_results == True:
         print_results(T, paramsL, paramsH, elapsed_time)
 
-    return paramsL, paramsH, T, inner_loop_objectives, epoch_objectives, condition_num_list
+    return opt_params, T #, inner_loop_objectives, epoch_objectives, condition_num_list
 
 
 
@@ -1426,14 +1504,14 @@ def init_in_frobenius_ball(shape, epsilon):
     return nn.Parameter(matrix)  # This ensures requires_grad=True
 
 def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilon, delta, eta_min, eta_max,
-                                    num_steps_min, num_steps_max, max_iter, tol, seed, robust_L, robust_H, initialization):
+                                    num_steps_min, num_steps_max, max_iter, tol, seed, robust_L, robust_H, initialization, experiment):
     
     torch.manual_seed(seed)
     Ill = list(L_models.keys())
-    erica = robust_L or robust_H
 
-    if not erica:
-        num_steps_min = 1
+    method  = 'erica' if robust_L or robust_H else 'enrico'
+    num_steps_min = 1 if method == 'enrico' else num_steps_min
+
     # Convert inputs to torch tensors
     U_L = torch.as_tensor(U_L, dtype=torch.float32)
     U_H = torch.as_tensor(U_H, dtype=torch.float32)
@@ -1471,7 +1549,7 @@ def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilo
             optimizer_T.step()
         #plot_progress(objs_T, 'T')
         # Step 2: Maximize with respect to Theta and Phi
-        if erica == True:
+        if method == 'erica':
             for _ in range(num_steps_max):
                 optimizer_max.zero_grad()
                 max_objective = -empirical_objective(U_L, U_H, T, Theta, Phi, L_models, H_models, Ill, omega)
@@ -1486,8 +1564,6 @@ def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilo
                 mobj = empirical_objective(U_L, U_H, T, Theta, Phi, L_models, H_models, Ill, omega)
                 objs_max.append(mobj.item())
 
-        #plot_progress(objs_max, 'max')
-        # Check convergence of T's objective
         with torch.no_grad():
             current_T_objective = T_objective.item()
             if abs(prev_T_objective - current_T_objective) < tol:
@@ -1495,10 +1571,28 @@ def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilo
                 break
             prev_T_objective = current_T_objective
             
-            # if iteration % 10 == 0:
-            #     print(f"Iteration {iteration}, T Objective: {current_T_objective}")
+    T       = T.detach().numpy()
+    paramsL = {'pert_U': Theta.detach().numpy(), 'radius_worst': epsilon,
+                    'pert_hat': U_L, 'radius': epsilon}
+    paramsH = {'pert_U': Phi.detach().numpy(), 'radius_worst': delta,
+                    'pert_hat': U_H, 'radius': delta}
     
-    return T.detach().numpy(), Theta.detach().numpy(), Phi.detach().numpy()
+    if method == 'erica':
+        
+        radius_worst_L          = evut.compute_empirical_worst_case_distance(paramsL)
+        paramsL['radius_worst'] = radius_worst_L
+
+        radius_worst_H          = evut.compute_empirical_worst_case_distance(paramsH)
+        paramsH['radius_worst'] = radius_worst_H
+
+    opt_params = {'L': paramsL, 'H': paramsH}
+
+    save_dir = f"data/{experiment}/{method}"
+    os.makedirs(save_dir, exist_ok=True)
+
+    joblib.dump(opt_params, f"data/{experiment}/{method}/opt_params.pkl")
+
+    return opt_params, T
 
 def run_empirical_smooth_optimization(U_L, U_H, L_models, H_models, omega, eta_min,
                                     num_steps_min, max_iter, tol, seed,
