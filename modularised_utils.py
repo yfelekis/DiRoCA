@@ -208,6 +208,32 @@ def compute_wasserstein(mu1, cov1, mu2, cov2):
     
     return dist
 
+def compute_gaussian_kl(mu1, sigma1, mu2, sigma2):
+    """
+    Compute KL divergence between two multivariate Gaussians:
+    KL(N(mu1,sigma1) || N(mu2,sigma2))
+    
+    Formula:
+    0.5 * (tr(sigma2^(-1) @ sigma1) + (mu2-mu1)^T @ sigma2^(-1) @ (mu2-mu1) - k + ln(det(sigma2)/det(sigma1)))
+    where k is the dimension of the distributions
+    """
+    k = len(mu1)
+    
+    # Compute inverse of sigma2
+    sigma2_inv = np.linalg.inv(sigma2)
+    
+    # Compute difference in means
+    mu_diff = mu2 - mu1
+    
+    # Compute terms
+    term1 = np.trace(sigma2_inv @ sigma1)
+    term2 = mu_diff.T @ sigma2_inv @ mu_diff
+    term3 = k
+    term4 = np.log(np.linalg.det(sigma2) / np.linalg.det(sigma1))
+    
+    kl = 0.5 * (term1 + term2 - term3 + term4)
+    return kl
+
 def compute_jensenshannon(samples1, samples2, bins=100):
     """
     Compute Jensen-Shannon divergence between two sets of samples
@@ -384,7 +410,7 @@ Since covariance matrices must be symmetric and positive semi-definite
 the go-to method for sampling such matrices.
 """
 def sample_moments_U(mu_hat, Sigma_hat, bound, mu_method = 'perturbation', Sigma_method = 'uniform', 
-                     mu_scale = 0.1, Sigma_scale = 0.2, num_envs = 1, max_attempts = 1000, dag = None):
+                     mu_scale = 0.1, Sigma_scale = 0.2, num_envs = 1, max_attempts = 10000, dag = None):
     
     samples = [] # To store multiple samples
     
@@ -559,6 +585,22 @@ def get_coefficients_with_known_noise(data, noise, G):
                 coeffs[(parent, node)] = coef
                 
     return coeffs
+
+def compute_radius_lb(N, eta, c):
+    """
+    Computes the concentration radius epsilon_N(eta) lower bound
+
+    Parameters:
+    - N: int, number of samples
+    - eta: float, confidence parameter (0 < eta < 1)
+    - c: float, constant from the theorem (c > 1)
+
+    Returns:
+    - epsilon: float, the concentration bound
+    """
+    assert 0 < eta <= 1, "eta must be in (0, 1]"
+    assert c > 1, "c must be greater than 1"
+    return np.log(c / eta) / np.sqrt(N)
 # ######################## KEEP THIS! ########################
 # def get_coefficients(data, G):
 #     """

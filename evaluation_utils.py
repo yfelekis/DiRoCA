@@ -8,6 +8,8 @@ import seaborn as sns
 import modularised_utils as mut
 import opt_utils as oput
 import operations as ops
+import joblib
+
 
 def compute_worst_case_distance(params_worst):
     mu_worst = params_worst['mu_U']
@@ -495,6 +497,70 @@ def generate_noise(shape, noise_type, form, level, experiment, normalize, rad=No
     
     elif form == 'distributional':
         return noise_mu, noise_Sigma
+
+def load_optimization_params(experiment, level, method='erica'):
+    save_dir = f"data/{experiment}/{method}"
+    try:
+        opt_params = joblib.load(f"{save_dir}/opt_params.pkl")
+        params_L, params_H = opt_params['L'], opt_params['H']
+
+        return {'L': params_L, 'H': params_H}[level]
+       
+    except FileNotFoundError:
+        print(f"No saved parameters found in {save_dir}/opt_params.pkl")
+        return None, None
+    
+def generate_noise2(center, radius, sample_form, level, experiment, normalize, rad=None):
+    params = load_optimization_params(experiment, level)
+    n_vars = params['mu_hat'].shape[0]
+    #np.random.seed(seed) NEED FOR THE RADIUS VS ERROR?
+    if center == 'hat':
+        mu = params['mu_hat']
+        Sigma = params['Sigma_hat']
+    elif center == 'worst':
+        mu = params['mu_U']
+        Sigma = params['Sigma_U']
+    else:
+        raise ValueError(f"Unknown center: {center}")
+    
+    if radius == 'hat':
+        radius = params['radius']
+    elif radius == 'random':
+        radius = rad
+    elif radius == 'worst':
+        radius = params['g_squared']
+    else:
+        raise ValueError(f"Unknown radius: {radius}")
+    
+    if sample_form == 'boundary':
+        random_mu    = np.random.randn(n_vars)
+        random_Sigma = np.diag(np.random.rand(n_vars)) 
+
+        noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu, Sigma, radius)
+        
+    elif sample_form == 'sample':
+        noise_mu, noise_Sigma = mut.sample_moments_U(mu, Sigma, bound=radius, num_envs=1)[0]
+    else:
+        raise ValueError(f"Unknown sample form: {sample_form}")
+    
+    if normalize:
+        # Convert to numpy if tensor
+        if torch.is_tensor(noise_mu):
+            noise_mu = noise_mu.numpy()
+        if torch.is_tensor(noise_Sigma):
+            noise_Sigma = noise_Sigma.numpy()
+            
+        # Normalize using numpy
+        noise_mu = noise_mu / np.std(noise_mu)
+        noise_Sigma = noise_Sigma / np.std(noise_Sigma)
+
+    # Convert to numpy if still tensor
+    if torch.is_tensor(noise_mu):
+        noise_mu = noise_mu.numpy()
+    if torch.is_tensor(noise_Sigma):
+        noise_Sigma = noise_Sigma.numpy()
+
+    return noise_mu, noise_Sigma
 
 def generate_noise_fixed(n_samples, noise_type, form, level, experiment, normalize, rad=None):
 

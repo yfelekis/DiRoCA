@@ -824,6 +824,8 @@ def barycentric_optimization(theta_L, theta_H, LLmodels, HLmodels, Ill, Ihl, pro
     T  = T.detach().numpy()
     Tp = Tp.detach().numpy()
 
+    opt_params = {'L': paramsL, 'H': paramsH}
+
     end_time = time.time()
     elapsed_time = end_time - start_time
 
@@ -831,7 +833,7 @@ def barycentric_optimization(theta_L, theta_H, LLmodels, HLmodels, Ill, Ihl, pro
     if display_results == True: 
         print_results(T, paramsL, paramsH, elapsed_time)
 
-    return paramsL, paramsH, T
+    return opt_params, T
 
 
 
@@ -907,8 +909,9 @@ def random_smoothing_optimization(theta_hatL, theta_hatH, LLmodels, HLmodels, Il
 
     end_time = time.time()
     elapsed_time = end_time - start_time
-    
-    return T.detach().numpy()
+
+    opt_params = {'L': {}, 'H': {}}
+    return opt_params, T.detach().numpy()
 
 
 #================================================================= GELBRICH OPTIMISATION =================================================================
@@ -1051,7 +1054,7 @@ def prox_grad_Sigma_H(T, Sigma_H_half, LLmodels, Sigma_L, HLmodels, omega, lambd
     
     return Sigma_H_final
 
-def optimize_min(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega, lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
+def optimize_min1(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega, lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
                                                             epsilon, delta, num_steps_min, optimizer_T, max_grad_norm, seed, project_onto_gelbrich, xavier):
 
     torch.manual_seed(seed)
@@ -1308,7 +1311,7 @@ def compute_worst_case_distance(mu_worst, Sigma_worst, params_hat):
     return #diff, G_squared
 
 
-def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmodels, omega, lambda_L, lambda_H, lambda_param_L, lambda_param_H, 
+def run_erica_optimization1(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmodels, omega, lambda_L, lambda_H, lambda_param_L, lambda_param_H, 
                      xavier, project_onto_gelbrich, eta_min, eta_max, max_iter, num_steps_min, num_steps_max, proximal_grad,
                      tol, seed, robust_L, robust_H, grad_clip, plot_steps, plot_epochs, display_results, experiment):
     
@@ -1425,10 +1428,10 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
 
     opt_params = {'L': paramsL, 'H': paramsH}
 
-    save_dir = f"data/{experiment}/{method}"
-    os.makedirs(save_dir, exist_ok=True)
+    # save_dir = f"data/{experiment}/{method}"
+    # os.makedirs(save_dir, exist_ok=True)
 
-    joblib.dump(opt_params, f"data/{experiment}/{method}/opt_params.pkl")
+    # joblib.dump(opt_params, f"data/{experiment}/{method}/opt_params.pkl")
 
     T            = T.detach().numpy()
     end_time     = time.time()
@@ -1676,5 +1679,201 @@ def run_empirical_smooth_optimization(U_L, U_H, L_models, H_models, omega, eta_m
             
             # if iteration % 10 == 0:
             #     print(f"Iteration {iteration}, T Objective: {current_T_objective}")
-    
-    return T.detach().numpy()
+    opt_params = {'L': {}, 'H': {}}
+    return opt_params, T.detach().numpy()
+
+
+def optimize_min(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
+                 lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
+                 epsilon, delta, num_steps_min, optimizer_T, max_grad_norm, seed,
+                 project_onto_gelbrich, xavier):
+
+    torch.manual_seed(seed)
+    Ill = list(LLmodels.keys())
+
+    if xavier:
+        T = torch.nn.init.xavier_normal_(T, gain=0.01)
+
+    cur_mu_L = mu_L.clone()
+    cur_mu_H = mu_H.clone()
+    cur_Sigma_L = Sigma_L.clone()
+    cur_Sigma_H = Sigma_H.clone()
+
+    objective_T_step = torch.tensor(0.0)
+    T_objectives_epoch = []
+
+    for step in range(num_steps_min):
+        objective_iota = torch.tensor(0.0)
+        for n, iota in enumerate(Ill):
+            L_i = torch.from_numpy(LLmodels[iota].F).float()
+            H_i = torch.from_numpy(HLmodels[omega[iota]].F).float()
+
+            obj_value_iota = compute_objective_value(
+                T, L_i, H_i, cur_mu_L, cur_mu_H, cur_Sigma_L, cur_Sigma_H,
+                lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
+                epsilon, delta, project_onto_gelbrich
+            )
+            objective_iota += obj_value_iota
+
+        objective_T_step = objective_iota / (n + 1)
+        T_objectives_epoch.append(objective_T_step)
+
+        if torch.isnan(T).any():
+            print("T contains NaN! Returning previous matrix.")
+            print('Failed at step:', step + 1)
+            return T.detach().clone().requires_grad_(True), objective_T_step, T_objectives_epoch, True
+
+        optimizer_T.zero_grad()
+        objective_T_step.backward(retain_graph=True)
+
+        if max_grad_norm < float('inf'):
+            torch.nn.utils.clip_grad_norm_([T], max_grad_norm)
+
+        optimizer_T.step()
+
+    return T, objective_T_step, T_objectives_epoch, False
+
+def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmodels, omega,
+                           lambda_L, lambda_H, lambda_param_L, lambda_param_H,
+                           xavier, project_onto_gelbrich, eta_min, eta_max, max_iter,
+                           num_steps_min, num_steps_max, proximal_grad, tol, seed,
+                           robust_L, robust_H, grad_clip, plot_steps, plot_epochs,
+                           display_results, experiment):
+
+    torch.manual_seed(seed)
+
+    start_time = time.time()
+
+    epsilon = theta_hatL['radius'] if robust_L else 0
+    delta = theta_hatH['radius'] if robust_H else 0
+
+    method = 'erica' if robust_L or robust_H else 'enrico'
+    num_steps_min = 1 if method == 'enrico' else num_steps_min
+    max_grad_norm = 1.0 if grad_clip else float('inf')
+
+    if xavier and not project_onto_gelbrich:
+        print("Forcing projection onto Gelbrich ball!")
+        project_onto_gelbrich = True
+
+    max_converged = False
+
+    mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H = get_initialization(
+        theta_hatL, theta_hatH, epsilon, delta, initial_theta)
+
+    T = torch.randn(mu_H.shape[0], mu_L.shape[0], requires_grad=True)
+    optimizer_T = torch.optim.Adam([T], lr=eta_min, eps=1e-8, amsgrad=True)
+
+    condition_num_list = [evut.condition_number(T.detach().numpy())]
+    previous_objective = float('inf')
+    epoch_objectives = {'T_objectives_overall': [], 'theta_objectives_overall': []}
+
+    for epoch in tqdm(range(max_iter)):
+        inner_loop_objectives = {'min_objectives': [], 'max_objectives': []}
+
+        # Save previous T and parameters
+        T_prev = T.detach().clone()
+        mu_L_prev, Sigma_L_prev = mu_L.detach().clone(), Sigma_L.detach().clone()
+        mu_H_prev, Sigma_H_prev = mu_H.detach().clone(), mu_H.detach().clone()
+
+        T_new, objective_T, T_objectives_epoch, hit_nan = optimize_min(
+            T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
+            lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
+            epsilon, delta, num_steps_min, optimizer_T, max_grad_norm, seed,
+            project_onto_gelbrich, xavier)
+
+        if hit_nan:
+            print("NaN encountered during optimization. Returning last valid state.")
+
+            paramsL = {
+                'mu_U': mu_L_prev.detach().numpy(),
+                'Sigma_U': Sigma_L_prev.detach().numpy(),
+                'g_squared': epsilon,
+                'mu_hat': theta_hatL['mu_U'],
+                'Sigma_hat': theta_hatL['Sigma_U'],
+                'radius': epsilon
+            }
+
+            paramsH = {
+                'mu_U': mu_H_prev.detach().numpy(),
+                'Sigma_U': Sigma_H_prev.detach().numpy(),
+                'g_squared': delta,
+                'mu_hat': theta_hatH['mu_U'],
+                'Sigma_hat': theta_hatH['Sigma_U'],
+                'radius': delta
+            }
+
+            if method == 'erica':
+                paramsL['g_squared'] = np.sqrt(evut.compute_worst_case_distance(paramsL))
+                paramsH['g_squared'] = np.sqrt(evut.compute_worst_case_distance(paramsH))
+
+            return {'L': paramsL, 'H': paramsH}, T_prev.numpy()
+
+        inner_loop_objectives['min_objectives'] = T_objectives_epoch
+        epoch_objectives['T_objectives_overall'].append(objective_T)
+
+        if method == 'erica' and not max_converged:
+            if proximal_grad:
+                mu_L, Sigma_L, mu_H, Sigma_H, obj_theta, theta_objectives_epoch, max_converged = optimize_max_proxgrad(
+                    T_new, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
+                    hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
+                    lambda_L, lambda_H, lambda_param_L, lambda_param_H,
+                    eta_max, num_steps_max, epsilon, delta, seed, project_onto_gelbrich)
+            else:
+                mu_L, Sigma_L, mu_H, Sigma_H, obj_theta, theta_objectives_epoch, max_converged = optimize_max(
+                    T_new, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
+                    hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
+                    lambda_L, lambda_H, lambda_param_L, lambda_param_H,
+                    eta_max, num_steps_max, epsilon, delta, seed, project_onto_gelbrich,
+                    max_grad_norm)
+
+            if project_onto_gelbrich:
+                mu_L, Sigma_L = project_onto_gelbrich_ball(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
+                mu_H, Sigma_H = project_onto_gelbrich_ball(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
+
+            inner_loop_objectives['max_objectives'] = theta_objectives_epoch
+            epoch_objectives['theta_objectives_overall'].append(obj_theta)
+
+        if plot_steps:
+            plot_inner_loop_objectives(inner_loop_objectives, epoch)
+
+        criterion = abs(previous_objective - objective_T.item())
+        if criterion < tol:
+            print(f"Convergence reached at epoch {epoch+1} with objective {objective_T.item()}")
+            break
+
+        T = T_new
+        previous_objective = objective_T.item()
+
+    if plot_epochs:
+        plot_epoch_objectives(epoch_objectives)
+
+    paramsL = {
+        'mu_U': mu_L.detach().numpy(),
+        'Sigma_U': Sigma_L.detach().numpy(),
+        'g_squared': epsilon,
+        'mu_hat': theta_hatL['mu_U'],
+        'Sigma_hat': theta_hatL['Sigma_U'],
+        'radius': epsilon
+    }
+
+    paramsH = {
+        'mu_U': mu_H.detach().numpy(),
+        'Sigma_U': Sigma_H.detach().numpy(),
+        'g_squared': delta,
+        'mu_hat': theta_hatH['mu_U'],
+        'Sigma_hat': theta_hatH['Sigma_U'],
+        'radius': delta
+    }
+
+    if method == 'erica':
+        paramsL['g_squared'] = np.sqrt(evut.compute_worst_case_distance(paramsL))
+        paramsH['g_squared'] = np.sqrt(evut.compute_worst_case_distance(paramsH))
+
+    T = T.detach().numpy()
+    end_time = time.time()
+
+    if display_results:
+        elapsed_time = end_time - start_time
+        print_results(T, paramsL, paramsH, elapsed_time)
+
+    return {'L': paramsL, 'H': paramsH}, T
