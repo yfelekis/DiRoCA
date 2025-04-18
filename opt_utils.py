@@ -2,6 +2,8 @@ import numpy as np
 import torch
 import time
 import os
+import ot
+
 
 import networkx as nx
 from tqdm import tqdm
@@ -1877,3 +1879,53 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
         print_results(T, paramsL, paramsH, elapsed_time)
 
     return {'L': paramsL, 'H': paramsH}, T
+
+def empirical_bary(M):
+    return  sum(M) / len(M)
+
+def compute_transformed_samples(matrices, U):
+    return [(M @ U.T).T for M in matrices]
+
+def run_empirical_bary_optim(U_ll_hat, U_hl_hat, L_matrices, H_matrices, max_iter, tol, seed):
+    # Set seeds for reproducibility
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    UL, UH = torch.from_numpy(U_ll_hat).float(), torch.from_numpy(U_hl_hat).float()
+    
+    L_samples = compute_transformed_samples(L_matrices, U_ll_hat)
+    H_samples = compute_transformed_samples(H_matrices, U_hl_hat)
+
+   
+    bary_L = empirical_bary(L_samples).float()
+    bary_H = empirical_bary(H_samples).float()
+    
+    h = bary_H.shape[1]
+    l = bary_L.shape[1]
+    T = torch.randn(h, l, requires_grad=True)
+
+    optimizer_T        = torch.optim.Adam([T], lr=0.001)
+    previous_objective = float('inf')
+    objective_T        = 0  # Reset objective at the start of each step
+    # Optimization loop
+    #for step in tqdm(range(max_iter)):
+    for step in tqdm(range(int(max_iter))):
+        objective_T = 0  # Reset objective at the start of each step
+        
+        diff = T @ bary_L.T  - bary_H.T
+        # Normalize by matrix size
+        objective_T += torch.norm(diff, p='fro')**2 / (diff.shape[0] * diff.shape[1])
+
+        if abs(previous_objective - objective_T.item()) < tol:
+            print(f"Converged at step {step + 1}/{max_iter} with objective: {objective_T.item()}")
+            break
+
+        # Update previous objective
+        previous_objective = objective_T.item()
+
+        # Perform optimization step
+        optimizer_T.zero_grad()  # Clear gradients
+        objective_T.backward(retain_graph=True)  # Backpropagate
+        optimizer_T.step()  # Update T
+
+    return T.detach().numpy()  # Return final objective and optimized T
