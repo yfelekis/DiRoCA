@@ -245,6 +245,120 @@ def plot_abstraction_error(abstraction_error_dict, spacing_factor=0.2):
     
     return
 
+def plot_empirical_abstraction_error(results, methods, sample_form, figsize=(12, 8)):
+    """
+    Plot empirical abstraction error vs radius for specified methods and sample form.
+    
+    Parameters:
+    -----------
+    results : dict
+        The results dictionary containing the empirical data
+    methods : list
+        List of method names to plot
+    sample_form : str
+        Either 'boundary' or 'sample'
+    figsize : tuple
+        Figure size (width, height)
+    """
+    plt.figure(figsize=figsize)
+    
+    # Define method styles for basic methods
+    method_styles = {
+        'T_0.00': {'color': 'purple', 'label': r'$\mathrm{T}_{0,0}$', 'marker': 'o'},
+        'T_b': {'color': 'red', 'label': r'$\mathrm{T}_{b}$', 'marker': 's'},
+        'T_s': {'color': 'green', 'label': r'$\mathrm{T}_{s}$', 'marker': '^'},
+        'T_ba': {'color': 'orange', 'label': r'$\mathrm{T}_{ba}$', 'marker': 'D'}
+    }
+    
+    # Generate color map for epsilon-delta methods
+    n_colors = len([m for m in methods if '-' in m])  # Count methods with epsilon-delta format
+    if n_colors > 0:
+        colors = plt.cm.viridis(np.linspace(0, 1, n_colors))
+        color_idx = 0
+        
+        # Add styles for epsilon-delta methods
+        for method in methods:
+            if '-' in method:
+                eps, delta = method.replace('T_', '').split('-')
+                method_styles[method] = {
+                    'color': colors[color_idx],
+                    'label': f'$\\mathrm{{T}}_{{\\varepsilon_l={eps},\\varepsilon_h={delta}}}$',
+                    'marker': 'h'
+                }
+                color_idx += 1
+    
+    # Add styles for single parameter methods using blues
+    blues = plt.cm.Blues(np.linspace(0.6, 1, 5))
+    markers = ['h', 'v', 'p', '*', 'x']
+    for i, eps in enumerate(['0.031', '1', '2', '4', '8']):
+        method_name = f'T_{eps}'
+        if method_name in methods:  # Only add if method is actually used
+            method_styles[method_name] = {
+                'color': blues[i],
+                'label': f'$\\mathrm{{T}}_{{\\varepsilon={eps}}}$',
+                'marker': markers[i]
+            }
+    
+    # Extract radius values and sort them
+    radius_values = sorted([float(r) for r in results.keys()])
+    
+    # Plot each method
+    for method in methods:
+        if method not in method_styles:
+            print(f"Warning: No style defined for method {method}")
+            continue
+            
+        style = method_styles[method]
+        errors = []
+        error_stds = []
+        
+        # Collect data for each radius
+        for rad in radius_values:
+            values = results[rad][sample_form]['empirical'][method]
+            mean = np.mean(values)
+            std = np.std(values)
+            errors.append(mean)
+            error_stds.append(1.96 * std)  # 95% confidence interval
+        
+        # Plot with error bands
+        plt.plot(radius_values, errors,
+                f"{style['marker']}-",
+                color=style['color'],
+                label=style['label'],
+                alpha=0.8,
+                markersize=12,
+                linewidth=2)
+        
+        # plt.fill_between(radius_values,
+        #                 np.array(errors) - np.array(error_stds),
+        #                 np.array(errors) + np.array(error_stds),
+        #                 color=style['color'],
+        #                 alpha=0.2)
+    
+    # Customize plot
+    plt.xlabel(r'Perturbation Radius ($\varepsilon_{\ell}=\varepsilon_{h}$)', fontsize=30)
+    plt.ylabel('Empirical Abstraction Error', fontsize=30)
+    plt.xticks(fontsize=24)
+    plt.yticks(fontsize=24)
+    
+    # Add legend with two columns if many methods
+    n_methods = len([m for m in methods if m in method_styles])
+    ncols = 2 if n_methods > 6 else 1
+    
+    plt.legend(prop={'size': 24},
+              frameon=True,
+              framealpha=1,
+              borderpad=0.5,
+              handletextpad=0.5,
+              handlelength=1.5,
+              ncol=ncols,
+              loc='best')
+    
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    
+    plt.show()
+
 def plot_condition_nums(cn_dict, spacing_factor=0.2):
     """
     Plot condition numbers with consistent spacing logic.
@@ -673,7 +787,7 @@ def generate_noise_fixed(n_samples, noise_type, form, level, experiment, normali
     elif form == 'distributional':
         return noise_mu, noise_Sigma
     
-def generate_pertubation(data, pert_type, pert_level, experiment):
+def generate_pertubation11(data, pert_type, pert_level, experiment):
     N, n = data.shape
     
     boundary_matrix, radius = mut.load_empirical_boundary_params(experiment, pert_level)
@@ -690,6 +804,79 @@ def generate_pertubation(data, pert_type, pert_level, experiment):
         P = np.random.rand(N, n)
 
     return P
+
+def generate_perturbation_matrix(radius, sample_form, level, hat_dict, seed=None):
+    """
+    Generate a perturbation matrix either on the boundary or sampled from within a Frobenius ball.
+    
+    Args:
+        radius: Radius of the Frobenius ball
+        sample_form: Either 'sample' (from within ball) or 'boundary' (on boundary)
+        level: The level key to access in the dictionaries
+        hat_dict: Dictionary containing matrices for 'hat' case
+        worst_dict: Dictionary containing matrices for 'worst' case
+        seed: Optional random seed for reproducibility
+    
+    Returns:
+        Perturbation matrix that can be added to a center matrix
+    """
+    if seed is not None:
+        np.random.seed(seed)
+    
+    num_samples, num_vars = hat_dict[level].shape
+
+    # Generate random perturbation matrix
+    perturbation = np.random.randn(num_samples, num_vars)
+    
+    # Calculate norms
+    squared_norm = np.linalg.norm(perturbation, 'fro')**2
+    max_squared_norm = num_samples * radius**2
+    
+    # Calculate scaling factor based on sample type
+    if sample_form == 'boundary':
+        # Scale exactly to the radius
+        scaling_factor = np.sqrt(max_squared_norm / squared_norm)
+    elif sample_form == 'sample':
+        # Scale to be within the radius
+        scaling_factor = np.sqrt(max_squared_norm / squared_norm) * np.random.rand(1)
+    
+    return perturbation * scaling_factor
+
+def generate_perturbation_family(center_matrix, k, r_mu=1.0, r_sigma=1.0, seed=None):
+    """
+    Generate k perturbation matrices from a base matrix using random shifts.
+    
+    Args:
+        center_matrix: Base matrix to perturb (n, m)
+        k: Number of perturbations to generate
+        r_mu: Max norm of mean shifts
+        r_sigma: Max Frobenius norm of covariance shifts
+        seed: Optional random seed
+        
+    Returns:
+        List of perturbation matrices
+    """
+    if seed is not None:
+        np.random.seed(seed)
+        
+    n, m = center_matrix.shape
+    perturbations = []
+    
+    for _ in range(k):
+        # Generate random perturbation matrix
+        A = np.random.randn(n, m)
+        # Scale to have Frobenius norm = r_sigma
+        A = r_sigma * A / np.linalg.norm(A, ord='fro')
+        
+        # Add mean shift
+        delta_mu = np.random.randn(n, m)
+        delta_mu = r_mu * delta_mu / np.linalg.norm(delta_mu)
+        
+        # Combine perturbations
+        perturbation = A + delta_mu
+        perturbations.append(perturbation)
+        
+    return perturbations
 
 def compute_abstraction_error(T, base, abst, metric):
     tau_base   = base @ T.T
@@ -771,3 +958,230 @@ def compute_empirical_worst_case_distance(params_worst):
     N          = pert_worst.shape[0]
 
     return (1/np.sqrt(N)) * np.linalg.norm(pert_worst, 'fro') #torch.norm(pert_worst, p='fro') maybe torch different output
+
+
+######################################### CausAbs FUNCTIONS###############################################
+import numpy as np
+from sklearn.metrics import precision_score, recall_score, roc_auc_score, f1_score, confusion_matrix
+
+def perfect_abstraction(px_samples, py_samples, tau_threshold=1e-2):
+    """
+    Fits an abstraction function assumed to be perfect.
+    
+    Args:
+        px_samples: concrete/base samples (your df_base)
+        py_samples: abstract samples (your df_abst)
+        tau_threshold: threshold for filtering small values
+    """
+    tau_adj = np.linalg.pinv(px_samples) @ py_samples
+    tau_adj_mask = np.abs(tau_adj) > tau_threshold
+    tau_adj = tau_adj * tau_adj_mask
+    return tau_adj
+
+def noisy_abstraction(px_samples, py_samples, tau_threshold=1e-1, refit_coeff=False):
+    """
+    Fits an abstraction function assumed to be noisy.
+    """
+    # Reconstruct T
+    tau_adj_hat = np.linalg.pinv(px_samples) @ py_samples
+    
+    # Max entries
+    tau_mask_hat = np.argmax(np.abs(tau_adj_hat), axis=1)
+    # To one hot
+    abs_nodes = py_samples.shape[1]
+    tau_mask_hat = np.eye(abs_nodes)[tau_mask_hat]
+    # Filter out small values
+    tau_mask_hat *= np.array(np.abs(tau_adj_hat) > tau_threshold, dtype=np.int32)
+    
+    # Eventually refit coefficients
+    if refit_coeff:
+        for y in range(tau_mask_hat.shape[1]):
+            block = np.where(tau_mask_hat[:, y] == 1)[0]
+            if len(block) > 0:
+                tau_adj_hat[block, y] = np.linalg.pinv(px_samples[:, block]) @ py_samples[:, y]
+    
+    # Compute final abstraction
+    tau_adj_hat = tau_mask_hat * tau_adj_hat
+    return tau_adj_hat
+
+def abs_lingam_reconstruction(df_base, df_abst, style="Perfect", tau_threshold=1e-2):
+    """
+    Implement Abs-LiNGAM's T-reconstruction following the paper's implementation.
+    
+    Args:
+        df_base: numpy array of concrete observations
+        df_abst: numpy array of abstract observations
+        style: "Perfect" or "Noisy"
+        tau_threshold: threshold for filtering small values
+    """
+    # Verify shapes
+    n_samples_base, d = df_base.shape
+    n_samples_abst, b = df_abst.shape
+    
+    assert n_samples_base == n_samples_abst, \
+        f"Number of samples must match: {n_samples_base} != {n_samples_abst}"
+    
+    # Fit abstraction function based on style
+    if style == "Perfect":
+        T = perfect_abstraction(df_base, df_abst, tau_threshold)
+    elif style == "Noisy":
+        T = noisy_abstraction(df_base, df_abst, tau_threshold, False)
+    else:
+        raise ValueError(f"Unknown style {style}")
+    
+    # Compute reconstruction error
+    error = np.sum((df_base @ T - df_abst) ** 2)
+    
+    return T, error
+
+def evaluate_abstraction(df_base, df_abst, T, tau_threshold=1e-2):
+    """
+    Evaluate the abstraction quality using metrics from the paper.
+    """
+    # Predictions
+    predictions = df_base @ T
+    
+    # Create binary masks for evaluation
+    T_mask = np.abs(T) > tau_threshold
+    T_pred = np.abs(T) > tau_threshold
+    
+    # Basic metrics
+    mse = np.mean((df_abst - predictions) ** 2)
+    r2 = 1 - np.sum((df_abst - predictions) ** 2) / np.sum((df_abst - np.mean(df_abst, axis=0)) ** 2)
+    
+    # Structure metrics (from paper)
+    def false_positive_rate(y_true, y_pred):
+        cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
+        if cm.shape == (2, 2):
+            tn, fp, fn, tp = cm.ravel()
+            return fp / (fp + tn) if (fp + tn) > 0 else 0
+        return 0.0
+    
+    # Flatten for binary metrics
+    T_flat = T_mask.flatten()
+    T_pred_flat = T_pred.flatten()
+    
+    # Handle cases where all predictions are the same class
+    try:
+        prec = precision_score(T_flat, T_pred_flat)
+    except:
+        prec = 1.0 if np.array_equal(T_flat, T_pred_flat) else 0.0
+        
+    try:
+        rec = recall_score(T_flat, T_pred_flat)
+    except:
+        rec = 1.0 if np.array_equal(T_flat, T_pred_flat) else 0.0
+        
+    try:
+        f1 = f1_score(T_flat, T_pred_flat)
+    except:
+        f1 = 1.0 if np.array_equal(T_flat, T_pred_flat) else 0.0
+    
+    # Skip ROC AUC if we have only one class
+    unique_classes = np.unique(T_flat)
+    if len(unique_classes) == 2:
+        try:
+            roc_auc = roc_auc_score(T_flat, np.abs(T).flatten())
+        except:
+            roc_auc = np.nan
+    else:
+        roc_auc = np.nan
+    
+    metrics = {
+        'mse': mse,
+        'r2': r2,
+        'precision': prec,
+        'recall': rec,
+        'f1': f1,
+        'roc_auc': roc_auc,
+        'fpr': false_positive_rate(T_flat, T_pred_flat)
+    }
+    
+    # Add sparsity metric
+    metrics['sparsity'] = 1.0 - (np.sum(T_mask) / T_mask.size)
+    
+    return metrics
+
+# def run_abs_lingam_complete(df_base, df_abst):
+#     """
+#     Run complete Abs-LiNGAM algorithm with different abstraction styles.
+#     """
+#     styles = ["Perfect", "Noisy"]
+#     results = {}
+    
+#     for style in styles:
+#         # print(f"\nTesting {style} abstraction:")
+#         T, error = abs_lingam_reconstruction(df_base, df_abst, style=style)
+#         metrics = evaluate_abstraction(df_base, df_abst, T)
+        
+#         results[style] = {
+#             'T': T,
+#             'error': error,
+#             'metrics': metrics
+#         }
+    
+#     return results
+
+def abs_lingam_reconstruction_v2(df_base, df_abst, n_paired_samples=None, style="Perfect", tau_threshold=1e-2):
+    """
+    Modified version to better match the paper's approach.
+    
+    Args:
+        df_base: numpy array of concrete observations (D_L)
+        df_abst: numpy array of abstract observations
+        n_paired_samples: number of samples to use for joint dataset (D_J)
+        style: "Perfect" or "Noisy"
+        tau_threshold: threshold for filtering small values
+    """
+    # Get dimensions
+    n_samples_base, d = df_base.shape
+    n_samples_abst, b = df_abst.shape
+    
+    # Create joint dataset D_J by taking a subset of paired samples
+    if n_paired_samples is None:
+        n_paired_samples = min(n_samples_base, n_samples_abst)
+    
+    # Ensure n_paired_samples is smaller than both datasets
+    n_paired_samples = min(n_paired_samples, n_samples_base, n_samples_abst)
+    
+    # Create D_J using the first n_paired_samples
+    D_J_base = df_base[:n_paired_samples]
+    D_J_abst = df_abst[:n_paired_samples]
+    
+    # Fit abstraction function based on style using only paired data
+    if style == "Perfect":
+        T = perfect_abstraction(D_J_base, D_J_abst, tau_threshold)
+    elif style == "Noisy":
+        T = noisy_abstraction(D_J_base, D_J_abst, tau_threshold, False)
+    else:
+        raise ValueError(f"Unknown style {style}")
+    
+    # Compute reconstruction error using all available data
+    error = np.sum((df_base @ T - df_abst) ** 2)
+    
+    return T, error
+
+# Usage example:
+def run_abs_lingam_complete(df_base, df_abst, n_paired_samples=1000):
+    """
+    Run complete Abs-LiNGAM algorithm with different abstraction styles.
+    """
+    styles = ["Perfect", "Noisy"]
+    results = {}
+    
+    for style in styles:
+        T, error = abs_lingam_reconstruction_v2(
+            df_base, 
+            df_abst,
+            n_paired_samples=n_paired_samples,
+            style=style
+        )
+        metrics = evaluate_abstraction(df_base, df_abst, T)
+        
+        results[style] = {
+            'T': T,
+            'error': error,
+            'metrics': metrics
+        }
+    
+    return results
