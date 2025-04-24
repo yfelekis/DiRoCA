@@ -262,14 +262,15 @@ def plot_empirical_abstraction_error(results, methods, sample_form, figsize=(12,
     """
     plt.figure(figsize=figsize)
     
-    # Define method styles for basic methods
+        # Define method styles for basic methods
     method_styles = {
         'T_0.00': {'color': 'purple', 'label': r'$\mathrm{T}_{0,0}$', 'marker': 'o'},
         'T_b': {'color': 'red', 'label': r'$\mathrm{T}_{b}$', 'marker': 's'},
         'T_s': {'color': 'green', 'label': r'$\mathrm{T}_{s}$', 'marker': '^'},
-        'T_ba': {'color': 'orange', 'label': r'$\mathrm{T}_{ba}$', 'marker': 'D'}
+        'T_ba': {'color': 'orange', 'label': r'$\mathrm{T}_{ba}$', 'marker': 'D'},
+        'T_pa': {'color': 'brown', 'label': r'$\mathrm{T}_{pa}$', 'marker': 'P'},  # Added T_pa
+        'T_na': {'color': 'cyan', 'label': r'$\mathrm{T}_{na}$', 'marker': 'X'}    # Added T_na
     }
-    
     # Generate color map for epsilon-delta methods
     n_colors = len([m for m in methods if '-' in m])  # Count methods with epsilon-delta format
     if n_colors > 0:
@@ -805,7 +806,7 @@ def generate_pertubation11(data, pert_type, pert_level, experiment):
 
     return P
 
-def generate_perturbation_matrix(radius, sample_form, level, hat_dict, seed=None):
+def generate_perturbation_matrix2(radius, sample_form, level, hat_dict, seed=None):
     """
     Generate a perturbation matrix either on the boundary or sampled from within a Frobenius ball.
     
@@ -840,6 +841,123 @@ def generate_perturbation_matrix(radius, sample_form, level, hat_dict, seed=None
         # Scale to be within the radius
         scaling_factor = np.sqrt(max_squared_norm / squared_norm) * np.random.rand(1)
     
+    return perturbation * scaling_factor
+
+def generate_perturbation_family(center_matrix, k, r_mu, r_sigma, coverage, seed=None):
+    """
+    Generate k perturbation matrices with option for uniform coverage.
+    
+    Args:
+        center_matrix: Base matrix to perturb (n, m)
+        k: Number of perturbations to generate
+        r_mu: Max norm of mean shifts
+        r_sigma: Max Frobenius norm of covariance shifts
+        coverage: Either 'rand' (original) or 'uniform' for better ball coverage
+        seed: Optional random seed
+        
+    Returns:
+        List of perturbation matrices
+    """
+    if seed is not None:
+        np.random.seed(seed)
+        
+    n, m = center_matrix.shape
+    total_dims = n * m  # Total dimensionality for uniform sampling
+    perturbations = []
+    
+    for i in range(k):
+        if coverage == 'rand':
+            # Original random perturbation logic
+            # Covariance perturbation
+            A = np.random.randn(n, m)
+            A = r_sigma * A / np.linalg.norm(A, ord='fro')
+            
+            # Mean shift
+            delta_mu = np.random.randn(n, m)
+            delta_mu = r_mu * delta_mu / np.linalg.norm(delta_mu)
+            
+        elif coverage == 'uniform':
+            # Uniform coverage for both components
+            
+            # Covariance perturbation - uniform in r_sigma ball
+            A = np.random.randn(n, m)
+            A_norm = np.linalg.norm(A, ord='fro')
+            A = A / A_norm
+            # Use proper radius distribution for uniform sampling
+            u_sigma = np.random.random()
+            r_sigma_actual = r_sigma * u_sigma**(1.0/total_dims)
+            A = r_sigma_actual * A
+            
+            # Mean shift - uniform in r_mu ball
+            delta_mu = np.random.randn(n, m)
+            mu_norm = np.linalg.norm(delta_mu, ord='fro')
+            delta_mu = delta_mu / mu_norm
+            # Use proper radius distribution for uniform sampling
+            u_mu = np.random.random()
+            r_mu_actual = r_mu * u_mu**(1.0/total_dims)
+            delta_mu = r_mu_actual * delta_mu
+            
+        else:
+            raise ValueError(f"Unknown coverage type: {coverage}. Use 'rand' or 'uniform'")
+        
+        # Combine perturbations
+        perturbation = A + delta_mu
+        perturbations.append(perturbation)
+        
+    return perturbations
+
+def generate_perturbation_matrix2(radius, sample_form, level, hat_dict, coverage, seed=None):
+    """
+    Generate a perturbation matrix with flexible sampling strategies.
+    
+    Args:
+        radius: Radius of the Frobenius ball
+        sample_form: Either 'sample' (from within ball) or 'boundary' (on boundary)
+        level: The level key to access in the dictionaries
+        hat_dict: Dictionary containing matrices for 'hat' case
+        coverage: Either 'rand' (original random sampling) or 'uniform' (uniform ball coverage)
+        seed: Optional random seed for reproducibility
+    
+    Returns:
+        Perturbation matrix that can be added to a center matrix
+    """
+    if seed is not None:
+        np.random.seed(seed)
+    
+    num_samples, num_vars = hat_dict[level].shape
+    total_dims = num_samples * num_vars
+
+    # Generate initial random perturbation
+    perturbation = np.random.randn(num_samples, num_vars)
+    
+    # Boundary case - always use original logic
+    if sample_form == 'boundary':
+        squared_norm = np.linalg.norm(perturbation, 'fro')**2
+        max_squared_norm = num_samples * radius**2
+        scaling_factor = np.sqrt(max_squared_norm / squared_norm)
+    
+    # Sample case - choose between random and uniform coverage
+    elif sample_form == 'sample':
+        if coverage == 'rand':
+            # Original random sampling logic
+            squared_norm = np.linalg.norm(perturbation, 'fro')**2
+            max_squared_norm = num_samples * radius**2
+            scaling_factor = np.sqrt(max_squared_norm / squared_norm) * np.random.rand(1)
+        
+        elif coverage == 'uniform':
+            # Uniform ball coverage logic
+            norms = np.linalg.norm(perturbation, 'fro')
+            perturbation = perturbation / norms
+            u = np.random.random()
+            r = radius * u**(1.0/total_dims)
+            scaling_factor = r * np.sqrt(num_samples)
+        
+        else:
+            raise ValueError(f"Unknown coverage type: {coverage}. Use 'rand' or 'uniform'")
+    
+    else:
+        raise ValueError(f"Unknown sample form: {sample_form}. Use 'sample' or 'boundary'")
+
     return perturbation * scaling_factor
 
 def generate_perturbation_family(center_matrix, k, r_mu=1.0, r_sigma=1.0, seed=None):

@@ -166,3 +166,34 @@ class MatrixDistances:
     def l1_distance(A, B):
         """Manhattan distance (sum of absolute differences)"""
         return np.sum(np.abs(A - B))
+    
+class Pair:
+    
+    def __init__(self, base_dict, abst_dict, iota_base, iota_abst):
+        self.base_dict         = base_dict
+        self.abst_dict         = abst_dict
+        self.iota_base         = iota_base
+        self.iota_abst         = iota_abst
+        self.base_distribution = list(self.base_dict.values())
+        self.abst_distribution = list(self.abst_dict.values())
+        self.base_labels       = list(self.base_dict.keys())
+        self.abst_labels       = list(self.abst_dict.keys())
+        
+
+    def get_domain(self, model):
+        dom = []
+        if model == 'base':
+            if self.iota_base.get_variable() == [None]:
+                return self.base_labels
+            for label in self.base_labels:
+                if all(label[var] == val for var, val in self.iota_base.get_base_criteria()):
+                    dom.append(label)
+                    
+        elif model == 'abst':
+            if self.iota_abst.get_variable() == [None]:
+                return self.abst_labels
+            for label in self.abst_labels:
+                if all(label[var] == val for var, val in self.iota_abst.get_abst_criteria()):
+                    dom.append(label)
+        
+        return dom
