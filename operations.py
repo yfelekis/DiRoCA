@@ -167,6 +167,14 @@ class MatrixDistances:
         """Manhattan distance (sum of absolute differences)"""
         return np.sum(np.abs(A - B))
     
+    @staticmethod
+    def l2_distance(A, B):
+        """
+        Compute L2 (Euclidean) distance between matrices A and B.
+        """
+        diff = A - B
+        return np.sqrt(np.sum(diff**2))
+    
 class Pair:
     
     def __init__(self, base_dict, abst_dict, iota_base, iota_abst):

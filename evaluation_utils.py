@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from modularised_utils import compute_wasserstein   
+from math_utils import compute_wasserstein   
 import torch
 from sklearn.mixture import GaussianMixture
 from scipy.linalg import sqrtm
@@ -262,7 +262,7 @@ def plot_empirical_abstraction_error(results, methods, sample_form, figsize=(12,
     """
     plt.figure(figsize=figsize)
     
-        # Define method styles for basic methods
+    # Define method styles for basic methods
     method_styles = {
         'T_0.00': {'color': 'purple', 'label': r'$\mathrm{T}_{0,0}$', 'marker': 'o'},
         'T_b': {'color': 'red', 'label': r'$\mathrm{T}_{b}$', 'marker': 's'},
@@ -906,7 +906,7 @@ def generate_perturbation_family(center_matrix, k, r_mu, r_sigma, coverage, seed
         
     return perturbations
 
-def generate_perturbation_matrix2(radius, sample_form, level, hat_dict, coverage, seed=None):
+def generate_perturbation_matrix(radius, sample_form, level, hat_dict, coverage, seed=None):
     """
     Generate a perturbation matrix with flexible sampling strategies.
     
@@ -960,7 +960,7 @@ def generate_perturbation_matrix2(radius, sample_form, level, hat_dict, coverage
 
     return perturbation * scaling_factor
 
-def generate_perturbation_family(center_matrix, k, r_mu=1.0, r_sigma=1.0, seed=None):
+def generate_perturbation_family2(center_matrix, k, r_mu=1.0, r_sigma=1.0, seed=None):
     """
     Generate k perturbation matrices from a base matrix using random shifts.
     
@@ -1022,7 +1022,9 @@ def compute_empirical_distance(tbase, abst, metric):
     elif metric == 'spectral':
         dist     = ops.MatrixDistances.spectral_norm_distance(tbase, abst)
     elif metric == 'l1':
-        dist     = ops.MatrixDistances.l1_distance(tbase, abst)    
+        dist     = ops.MatrixDistances.l1_distance(tbase, abst)  
+    elif metric == 'l2': 
+        dist = ops.MatrixDistances.l2_distance(tbase, abst)  
     else:
         raise ValueError(f"Invalid metric: {metric}")
 

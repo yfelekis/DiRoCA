@@ -6,6 +6,7 @@ import random
 import networkx as nx
 import numpy as np
 import joblib
+import torch
 
 from scipy.stats import wishart
 from scipy.linalg import sqrtm
@@ -25,6 +26,9 @@ from sklearn.linear_model import LinearRegression, Ridge
 
 from src.CBN import CausalBayesianNetwork as CBN
 import operations as ops
+import opt_utils as oput 
+from math_utils import compute_wasserstein
+
 
 def sample_contexts(num_samples, ex_distribution, ex_coefficients):
         
@@ -409,7 +413,123 @@ Since covariance matrices must be symmetric and positive semi-definite
 (i.e., they have non-negative eigenvalues), the Wishart distribution is 
 the go-to method for sampling such matrices.
 """
-def sample_moments_U(mu_hat, Sigma_hat, bound, mu_method = 'perturbation', Sigma_method = 'uniform', 
+def noise_generation(center, radius, sample_form, level, hat_dict, worst_dict, coverage, normalize):
+    #np.random.seed(42) 
+    
+    if center == 'hat':
+        mu = hat_dict[level][0]
+        Sigma = hat_dict[level][1]
+    elif center == 'worst':
+        mu = worst_dict[level][0]
+        Sigma = worst_dict[level][1]
+    else:
+        raise ValueError(f"Unknown center: {center}")
+    n_vars = mu.shape[0]
+    
+    if sample_form == 'boundary':
+        random_mu    = np.random.randn(n_vars)
+        random_Sigma = np.diag(np.random.rand(n_vars)) 
+
+        noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu, Sigma, radius)
+        
+    elif sample_form == 'sample':
+        #noise_mu, noise_Sigma = mut.sample_moments_U(mu, Sigma, bound=radius, num_envs=1)[0]
+        noise_mu, noise_Sigma = sample_moments_U(mu, Sigma, bound=radius, coverage=coverage)
+
+    else:
+        raise ValueError(f"Unknown sample form: {sample_form}")
+    
+    if normalize:
+        # Convert to numpy if tensor
+        if torch.is_tensor(noise_mu):
+            noise_mu = noise_mu.numpy()
+        if torch.is_tensor(noise_Sigma):
+            noise_Sigma = noise_Sigma.numpy()
+            
+        # Normalize using numpy
+        noise_mu = noise_mu / np.std(noise_mu)
+        noise_Sigma = noise_Sigma / np.std(noise_Sigma)
+
+    # Convert to numpy if still tensor
+    if torch.is_tensor(noise_mu):
+        noise_mu = noise_mu.numpy()
+    if torch.is_tensor(noise_Sigma):
+        noise_Sigma = noise_Sigma.numpy()
+
+    return noise_mu, noise_Sigma
+
+def sample_moments_U(mu_hat, Sigma_hat, bound, mu_method='perturbation', Sigma_method='uniform', 
+                    mu_scale=0.1, Sigma_scale=0.2, coverage='rand', seed=None):
+    """
+    Sample a single pair of moments (mu, Sigma) with option for uniform coverage in Wasserstein ball.
+    
+    Args:
+        mu_hat: Center mean vector
+        Sigma_hat: Center covariance matrix
+        bound: Radius of Wasserstein ball
+        mu_scale, Sigma_scale: Scaling factors
+        coverage: 'rand' (original) or 'uniform' for better ball coverage
+        seed: Optional random seed
+    Returns:
+        tuple: (mu, Sigma) - A single pair of mean vector and covariance matrix
+    """
+    if seed is not None:
+        np.random.seed(seed)
+        
+    n = len(mu_hat)  # dimension of the space
+    max_attempts = 10000
+    
+    for attempt in range(max_attempts):
+        if coverage == 'rand':
+            # Original random sampling
+            mu = sample_meanvec(mu_hat, mu_scale, mu_method)
+            Sigma = sample_covariance(Sigma_hat, bound, Sigma_method, Sigma_scale)
+            
+        elif coverage == 'uniform':
+            # Uniform coverage in Wasserstein ball
+            # Sample radius uniformly in [0, bound^2]
+            total_dims = n + (n * (n + 1)) // 2
+            u = np.random.random()
+            radius = bound * u**(1.0/total_dims)
+            
+            # Sample direction uniformly
+            direction = np.random.randn(total_dims)
+            direction = direction / np.linalg.norm(direction)
+            
+            # Split into mean and covariance components
+            mean_dims = n
+            mean_component = direction[:mean_dims] * radius * np.sqrt(mu_scale)
+            cov_component = direction[mean_dims:] * radius * np.sqrt(Sigma_scale)
+            
+            # Convert to mu and Sigma
+            mu = mu_hat + mean_component
+            
+            # Convert cov_component to symmetric matrix
+            cov_matrix = np.zeros((n, n))
+            idx = 0
+            for i in range(n):
+                for j in range(i, n):
+                    cov_matrix[i,j] = cov_matrix[j,i] = cov_component[idx]
+                    idx += 1
+            
+            Sigma = Sigma_hat + cov_matrix
+            
+            # Ensure Sigma is positive definite
+            min_eigenval = np.min(np.linalg.eigvals(Sigma))
+            if min_eigenval < 0:
+                Sigma -= (min_eigenval - 1e-6) * np.eye(n)
+        
+        else:
+            raise ValueError(f"Unknown coverage type: {coverage}. Use 'rand' or 'uniform'")
+        
+        # Check Wasserstein constraint
+        if compute_wasserstein(mu_hat, Sigma_hat, mu, Sigma) <= bound**2:
+            return mu, Sigma
+            
+    raise ValueError(f"Failed to find valid sample in {max_attempts} attempts")
+
+
+def sample_moments_U2(mu_hat, Sigma_hat, bound, mu_method = 'perturbation', Sigma_method = 'uniform', 
                      mu_scale = 0.1, Sigma_scale = 0.2, num_envs = 1, max_attempts = 10000, dag = None):
     
     samples = [] # To store multiple samples
@@ -464,6 +584,80 @@ def sample_stoch_matrix(n, m, axis=0):
         matrix = matrix / matrix.sum(axis=0, keepdims=True)
     
     return matrix
+
+
+def generate_shifted_gaussian_family(mu, Sigma, k, r_mu=1.0, r_sigma=1.0, coverage='rand', seed=None):
+    """
+    Generate k shifted multivariate Gaussians with option for uniform coverage.
+
+    Args:
+        mu: Base mean vector (d,)
+        Sigma: Base covariance matrix (d, d)
+        k: Number of shifted distributions
+        r_mu: Max norm of mean shifts
+        r_sigma: Max Frobenius norm of covariance shifts
+        coverage: 'rand' (original) or 'uniform' for better ball coverage
+        seed: Optional random seed
+
+    Returns:
+        List of (mu_i, Sigma_i) tuples
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    d = mu.shape[0]
+    shifted = []
+    total_dims = d + (d * (d + 1)) // 2  # Total dimensions (mean + unique covariance elements)
+
+    for _ in range(k):
+        if coverage == 'rand':
+            # Original random sampling
+            # Mean shift: random direction, scaled to r_mu
+            delta_mu = np.random.randn(d)
+            delta_mu = r_mu * delta_mu / np.linalg.norm(delta_mu)
+
+            # Covariance shift: random symmetric matrix with Frobenius norm = r_sigma
+            A = np.random.randn(d, d)
+            sym_A = (A + A.T) / 2
+            delta_Sigma = r_sigma * sym_A / np.linalg.norm(sym_A, ord='fro')
+
+        elif coverage == 'uniform':
+            # Uniform coverage in combined space
+            # Sample radius using proper power-law scaling
+            u = np.random.random()
+            radius_mu = r_mu * u**(1.0/total_dims)
+            radius_sigma = r_sigma * u**(1.0/total_dims)
+
+            # Sample direction for mean uniformly on unit sphere
+            mean_dir = np.random.randn(d)
+            mean_dir = mean_dir / np.linalg.norm(mean_dir)
+            delta_mu = radius_mu * mean_dir
+
+            # Sample direction for covariance uniformly
+            cov_vec = np.random.randn((d * (d + 1)) // 2)
+            cov_vec = cov_vec / np.linalg.norm(cov_vec)
+            
+            # Convert to symmetric matrix
+            delta_Sigma = np.zeros((d, d))
+            idx = 0
+            for i in range(d):
+                for j in range(i, d):
+                    delta_Sigma[i,j] = delta_Sigma[j,i] = cov_vec[idx] * radius_sigma
+                    idx += 1
+
+        else:
+            raise ValueError(f"Unknown coverage type: {coverage}. Use 'rand' or 'uniform'")
+
+        mu_i = mu + delta_mu
+        Sigma_i = Sigma + delta_Sigma
+
+        # Ensure positive semi-definite
+        eigvals, eigvecs = np.linalg.eigh(Sigma_i)
+        Sigma_i = eigvecs @ np.diag(np.clip(eigvals, 1e-4, None)) @ eigvecs.T
+
+        shifted.append((mu_i, Sigma_i))
+
+    return shifted
 
 def generate_perturbed_datasets(D, bound, num_envs=1, p=2):
     """
