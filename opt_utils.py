@@ -1457,7 +1457,7 @@ def empirical_objective(U_L, U_H, T, Theta, Phi, L_models, H_models, Ill, omega)
         
         pert_L_i = U_L + Theta
         pert_H_i = U_H + Phi
-        
+
         diff = T @ L_i @ pert_L_i.T - H_i @ pert_H_i.T
         # Normalize by matrix size
         loss_iota += torch.norm(diff, p='fro')**2 / (diff.shape[0] * diff.shape[1])
@@ -1929,3 +1929,253 @@ def run_empirical_bary_optim(U_ll_hat, U_hl_hat, L_matrices, H_matrices, max_ite
         optimizer_T.step()  # Update T
 
     return T.detach().numpy()  # Return final objective and optimized T
+
+
+#################################################BATTERY#################################################
+def run_empirical_erica_optimization_batt(U_L, U_H, L_models, H_models, omega, epsilon, delta, eta_min, eta_max,
+                                    num_steps_min, num_steps_max, max_iter, tol, seed, robust_L, robust_H, initialization, experiment):
+    
+    torch.manual_seed(seed)
+    Ill = list(L_models.keys())
+
+    method  = 'erica' if robust_L or robust_H else 'enrico'
+    num_steps_min = 1 if method == 'enrico' else num_steps_min
+
+    # Convert inputs to torch tensors
+    U_L = torch.as_tensor(U_L, dtype=torch.float32)
+    U_H = torch.as_tensor(U_H, dtype=torch.float32)
+    
+    # Get dimensions
+    N, l = U_L.shape
+    _, h = U_H.shape
+    
+    # Initialize variables
+    T     = torch.randn(h, l, requires_grad=True)
+    if initialization == 'random':
+        Theta = torch.randn(N, l, requires_grad=True)
+        Phi   = torch.randn(N, h, requires_grad=True)
+
+    elif initialization == 'projected':
+        Theta = init_in_frobenius_ball((N, l), epsilon)
+        Phi   = init_in_frobenius_ball((N, h), delta)
+
+    
+    # Create optimizers
+    optimizer_T   = torch.optim.Adam([T], lr=eta_min)
+    optimizer_max = torch.optim.Adam([Theta, Phi], lr=eta_max)
+    
+    prev_T_objective = float('inf')
+    
+    for iteration in tqdm(range(max_iter)):
+         
+        objs_T, objs_max = [], []
+        # Step 1: Minimize with respect to T
+        for _ in range(num_steps_min):
+            optimizer_T.zero_grad()
+            T_objective = empirical_objective_batt(U_L, U_H, T, Theta, Phi, L_models, H_models, Ill, omega)
+            objs_T.append(T_objective.item())
+            T_objective.backward()
+            optimizer_T.step()
+        #plot_progress(objs_T, 'T')
+        # Step 2: Maximize with respect to Theta and Phi
+        if method == 'erica':
+            for _ in range(num_steps_max):
+                optimizer_max.zero_grad()
+                max_objective = -empirical_objective_batt(U_L, U_H, T, Theta, Phi, L_models, H_models, Ill, omega)
+                max_objective.backward()
+                optimizer_max.step()
+                
+                # Project onto constraint sets
+                with torch.no_grad():
+                    Theta.data = project_onto_frobenius_ball(Theta, epsilon)
+                    Phi.data   = project_onto_frobenius_ball(Phi, delta)
+
+                mobj = empirical_objective_batt(U_L, U_H, T, Theta, Phi, L_models, H_models, Ill, omega)
+                objs_max.append(mobj.item())
+
+        with torch.no_grad():
+            current_T_objective = T_objective.item()
+            if abs(prev_T_objective - current_T_objective) < tol:
+                print(f"Converged at iteration {iteration + 1}")
+                break
+            prev_T_objective = current_T_objective
+            
+    T       = T.detach().numpy()
+    paramsL = {'pert_U': Theta.detach().numpy(), 'radius_worst': epsilon,
+                    'pert_hat': U_L, 'radius': epsilon}
+    paramsH = {'pert_U': Phi.detach().numpy(), 'radius_worst': delta,
+                    'pert_hat': U_H, 'radius': delta}
+    
+    if method == 'erica':
+        
+        radius_worst_L          = evut.compute_empirical_worst_case_distance(paramsL)
+        paramsL['radius_worst'] = radius_worst_L
+
+        radius_worst_H          = evut.compute_empirical_worst_case_distance(paramsH)
+        paramsH['radius_worst'] = radius_worst_H
+
+    opt_params = {'L': paramsL, 'H': paramsH}
+
+    save_dir = f"data/{experiment}/{method}"
+    os.makedirs(save_dir, exist_ok=True)
+
+    joblib.dump(opt_params, f"data/{experiment}/{method}/opt_params.pkl")
+
+    return opt_params, T
+
+def mod_noise(U_samples, intervention):
+    """
+    Modify exogenous noise for exact interventions by setting the entire column 
+    to the intervention value for each intervened variable.
+    
+    Args:
+        U_samples: Original noise samples (n_samples x n_variables)
+        intervention: Intervention object or None
+    """
+    U_modified = U_samples.clone() #.copy()
+    
+    if intervention is not None:
+        # Get dictionary of interventions
+        intervention_dict = intervention.vv()
+        
+        # For each intervened variable
+        for var in intervention.Phi():  # Use Phi() to get variables
+            value = intervention_dict[var]
+            
+            # If var is already an integer index, use it directly
+            if isinstance(var, (int, np.integer)):
+                var_idx = var
+            # Otherwise try to get the name or string representation
+            else:
+                var_idx = str(var)
+                # Map variable name to index based on your convention
+                # For example, if 'CG' maps to 0, 'ML1' to 1, etc.
+                var_map = {'CG': 0, 'ML1': 1, 'ML2': 2, 'S': 0, 'T': 1}
+                var_idx = var_map.get(var_idx, 0)  # default to 0 if not found
+            
+            # Set entire column to intervention value
+            U_modified[:, var_idx] = value
+    
+    return U_modified
+
+def run_empirical_smooth_optimization_batt(U_L, U_H, L_models, H_models, omega, eta_min,
+                                    num_steps_min, max_iter, tol, seed,
+                                    noise_sigma, num_noise_samples):
+    """
+    Run empirical optimization with randomized smoothing.
+    
+    Args:
+        U_L, U_H: Low and high level empirical data
+        L_models, H_models: Low and high level models
+        eta_min: Learning rate
+        num_steps_min: Number of inner loop steps
+        max_iter: Maximum number of iterations
+        tol: Tolerance for convergence
+        seed: Random seed
+        noise_sigma: Standard deviation for Gaussian noise
+        num_noise_samples: Number of noise samples per step
+    """
+    torch.manual_seed(seed)
+    Ill = list(L_models.keys())
+    # Convert inputs to torch tensors
+    U_L = torch.as_tensor(U_L, dtype=torch.float32)
+    U_H = torch.as_tensor(U_H, dtype=torch.float32)
+    
+    # Get dimensions
+    N, l = U_L.shape
+    _, h = U_H.shape
+    
+    # Initialize variables
+    T = torch.randn(h, l, requires_grad=True)
+    optimizer_T = torch.optim.Adam([T], lr=eta_min)
+    
+    prev_T_objective = float('inf')
+    
+    for iteration in tqdm(range(max_iter)):
+        objs_T = []
+        
+        # Step 1: Minimize with respect to T using randomized smoothing
+        for _ in range(num_steps_min):
+            optimizer_T.zero_grad()
+            
+            # Average objective over multiple noise samples
+            smoothed_objective = torch.tensor(0.0)
+            
+            for _ in range(num_noise_samples):
+                # Add noise to T
+                noise = torch.randn_like(T) * noise_sigma
+                noisy_T = T + noise
+                
+                # Compute objective with noisy T
+                T_objective = empirical_objective_no_max_batt(
+                    U_L, U_H, noisy_T, L_models, H_models, Ill, omega
+                )
+                smoothed_objective += T_objective
+            
+            # Average over noise samples
+            smoothed_objective /= num_noise_samples
+            objs_T.append(smoothed_objective.item())
+            
+            # Backward pass and optimization step
+            smoothed_objective.backward()
+            
+            # Optional: Gradient clipping
+            torch.nn.utils.clip_grad_norm_([T], max_norm=1.0)
+            
+            optimizer_T.step()
+            
+            # Check for NaN
+            if torch.isnan(T).any():
+                print("T contains NaN! Returning zero matrix.")
+                print('Failed at step:', iteration + 1)
+                return torch.zeros_like(T).detach()
+        
+        # Check convergence of T's objective
+        with torch.no_grad():
+            current_T_objective = smoothed_objective.item()
+            if abs(prev_T_objective - current_T_objective) < tol:
+                print(f"Converged at iteration {iteration + 1}")
+                break
+            prev_T_objective = current_T_objective
+            
+            # if iteration % 10 == 0:
+            #     print(f"Iteration {iteration}, T Objective: {current_T_objective}")
+    opt_params = {'L': {}, 'H': {}}
+    return opt_params, T.detach().numpy()
+
+def empirical_objective_batt(U_L, U_H, T, Theta, Phi, L_models, H_models, Ill, omega):
+
+    loss_iota = 0
+    for iota in Ill:
+        L_i = torch.from_numpy(L_models[iota].F).float()
+        H_i = torch.from_numpy(H_models[omega[iota]].F).float()
+
+        if iota is not None:
+            pert_L_i = mod_noise(U_L + Theta, iota)
+            pert_H_i = mod_noise(U_H + Phi, omega[iota])
+        else:
+            pert_L_i = U_L + Theta
+            pert_H_i = U_H + Phi
+
+        diff = T @ L_i @ pert_L_i.T - H_i @ pert_H_i.T
+        # Normalize by matrix size
+        loss_iota += torch.norm(diff, p='fro')**2 / (diff.shape[0] * diff.shape[1])
+    
+    loss = loss_iota / len(Ill)
+    return loss
+
+def empirical_objective_no_max_batt(U_L, U_H, T, L_models, H_models, Ill, omega):
+
+    loss_iota = 0
+    for iota in Ill:
+        L_i = torch.from_numpy(L_models[iota].F).float()
+        H_i = torch.from_numpy(H_models[omega[iota]].F).float()
+        if iota is not None:
+            diff = T @ L_i @ mod_noise(U_L, iota).T - H_i @ mod_noise(U_H, omega[iota]).T
+        else:
+            diff = T @ U_L.T - U_H.T
+
+        loss_iota += torch.norm(diff, p='fro')**2 / (diff.shape[0] * diff.shape[1])
+
+    loss = loss_iota / len(Ill)
+    return loss
