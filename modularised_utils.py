@@ -162,10 +162,7 @@ def taupush(dist, mechanism):
     """
     Apply a linear mechanism to a GMM by transforming its means and covariances.
     """
-    #diagonal_elements = dist.covariances_[0]
-    #dcovariances_     = np.zeros((len(diagonal_elements), len(diagonal_elements)))
-    
-    #np.fill_diagonal(dcovariances_, diagonal_elements)
+
 
     new_means         = mechanism.T @ dist.means_.T
     new_covariances   = mechanism.T @ dist.covariances_[0]@ mechanism
@@ -277,90 +274,90 @@ def compute_jensenshannon(samples1, samples2, bins=100):
     # Return average JS divergence across dimensions
     return js_div / n_dims
 
-def mat_wasserstein_distance(matrix1, matrix2):
-    """
-    Computes the average Wasserstein distance between corresponding rows of two matrices.
+# def mat_wasserstein_distance(matrix1, matrix2):
+#     """
+#     Computes the average Wasserstein distance between corresponding rows of two matrices.
 
-    Parameters:
-    - matrix1: np.ndarray of shape (n, m), first distribution matrix
-    - matrix2: np.ndarray of shape (n, m), second distribution matrix
+#     Parameters:
+#     - matrix1: np.ndarray of shape (n, m), first distribution matrix
+#     - matrix2: np.ndarray of shape (n, m), second distribution matrix
 
-    Returns:
-    - avg_wasserstein_distance: float, average Wasserstein distance between the rows of the two matrices
-    """
-    # Ensure the matrices have the same shape
-    assert matrix1.shape == matrix2.shape, "Matrices must have the same shape"
+#     Returns:
+#     - avg_wasserstein_distance: float, average Wasserstein distance between the rows of the two matrices
+#     """
+#     # Ensure the matrices have the same shape
+#     assert matrix1.shape == matrix2.shape, "Matrices must have the same shape"
 
-    # Compute the Wasserstein distance for each pair of corresponding rows
-    wasserstein_distances = []
-    for row1, row2 in zip(matrix1, matrix2):
-        distance = wasserstein_distance(row1, row2)
-        wasserstein_distances.append(distance)
+#     # Compute the Wasserstein distance for each pair of corresponding rows
+#     wasserstein_distances = []
+#     for row1, row2 in zip(matrix1, matrix2):
+#         distance = wasserstein_distance(row1, row2)
+#         wasserstein_distances.append(distance)
     
-    # Average the Wasserstein distances across all rows
-    avg_wasserstein_distance = np.mean(wasserstein_distances)
+#     # Average the Wasserstein distances across all rows
+#     avg_wasserstein_distance = np.mean(wasserstein_distances)
     
-    return avg_wasserstein_distance
+#     return avg_wasserstein_distance
 
 
-def mat_ot_wasserstein_distance(matrix1, matrix2, metric='euclidean'):
-    """
-    Computes the Wasserstein distance between two matrices using optimal transport.
+# def mat_ot_wasserstein_distance(matrix1, matrix2, metric='euclidean'):
+#     """
+#     Computes the Wasserstein distance between two matrices using optimal transport.
 
-    Parameters:
-    - matrix1: np.ndarray of shape (n, k), first dataset
-    - matrix2: np.ndarray of shape (m, k), second dataset
-    - metric: str, distance metric for computing ground cost (default: 'euclidean')
+#     Parameters:
+#     - matrix1: np.ndarray of shape (n, k), first dataset
+#     - matrix2: np.ndarray of shape (m, k), second dataset
+#     - metric: str, distance metric for computing ground cost (default: 'euclidean')
 
-    Returns:
-    - float, Wasserstein distance
-    """
-    # Number of samples
-    n, k1 = matrix1.shape
-    m, k2 = matrix2.shape
-    assert k1 == k2, "Both matrices must have the same number of features"
+#     Returns:
+#     - float, Wasserstein distance
+#     """
+#     # Number of samples
+#     n, k1 = matrix1.shape
+#     m, k2 = matrix2.shape
+#     assert k1 == k2, "Both matrices must have the same number of features"
 
-    # Uniform weights for each point (assuming empirical distributions)
-    weights1 = np.ones(n) / n
-    weights2 = np.ones(m) / m
+#     # Uniform weights for each point (assuming empirical distributions)
+#     weights1 = np.ones(n) / n
+#     weights2 = np.ones(m) / m
 
-    # Compute the cost matrix (ground metric between points)
-    cost_matrix = ot.dist(matrix1, matrix2, metric=metric)
+#     # Compute the cost matrix (ground metric between points)
+#     cost_matrix = ot.dist(matrix1, matrix2, metric=metric)
     
-    # Compute the Wasserstein distance
-    wasserstein_dist = ot.emd2(weights1, weights2, cost_matrix)
+#     # Compute the Wasserstein distance
+#     wasserstein_dist = ot.emd2(weights1, weights2, cost_matrix)
     
-    return wasserstein_dist
+#     return wasserstein_dist
 
-def mat_jsd_distance(matrix1, matrix2):
-    """
-    Computes the Jensen-Shannon Divergence (JSD) between two matrices.
+# def mat_jsd_distance(matrix1, matrix2):
+#     """
+#     Computes the Jensen-Shannon Divergence (JSD) between two matrices.
 
-    Parameters:
-    - matrix1: np.ndarray of shape (n, m), first distribution matrix
-    - matrix2: np.ndarray of shape (n, m), second distribution matrix
+#     Parameters:
+#     - matrix1: np.ndarray of shape (n, m), first distribution matrix
+#     - matrix2: np.ndarray of shape (n, m), second distribution matrix
 
-    Returns:
-    - jsd: float, Jensen-Shannon Divergence between the two matrices
-    """
-    # Normalize the matrices row-wise to represent probability distributions
-    matrix1_normalized = matrix1 / np.sum(matrix1, axis=1, keepdims=True)
-    matrix2_normalized = matrix2 / np.sum(matrix2, axis=1, keepdims=True)
+#     Returns:
+#     - jsd: float, Jensen-Shannon Divergence between the two matrices
+#     """
+#     # Normalize the matrices row-wise to represent probability distributions
+#     matrix1_normalized = matrix1 / np.sum(matrix1, axis=1, keepdims=True)
+#     matrix2_normalized = matrix2 / np.sum(matrix2, axis=1, keepdims=True)
 
-    # Compute the Jensen-Shannon Divergence for each row (distribution)
-    jsd_values = []
-    for row1, row2 in zip(matrix1_normalized, matrix2_normalized):
-        # Ensure no zero probabilities before calculating JSD
-        row1 = np.clip(row1, 1e-10, None)
-        row2 = np.clip(row2, 1e-10, None)
+#     # Compute the Jensen-Shannon Divergence for each row (distribution)
+#     jsd_values = []
+#     for row1, row2 in zip(matrix1_normalized, matrix2_normalized):
+#         # Ensure no zero probabilities before calculating JSD
+#         row1 = np.clip(row1, 1e-10, None)
+#         row2 = np.clip(row2, 1e-10, None)
         
-        jsd = jensenshannon(row1, row2)
-        jsd_values.append(jsd)
+#         jsd = jensenshannon(row1, row2)
+#         jsd_values.append(jsd)
     
-    # Average the JSD across all rows
-    jsd_mean = np.mean(jsd_values)
+#     # Average the JSD across all rows
+#     jsd_mean = np.mean(jsd_values)
     
-    return jsd_mean
+#     return jsd_mean
 
 def sample_covariance(Sigma_hat, epsilon, method, scale):
     """
@@ -406,13 +403,7 @@ def sample_meanvec(mu_hat, scale, mu_method):
         
     return new_mu
 
-"""
-The Wishart distribution is used to generate random positive semi-definite matrices, 
-which makes it a natural choice for sampling covariance matrices. 
-Since covariance matrices must be symmetric and positive semi-definite 
-(i.e., they have non-negative eigenvalues), the Wishart distribution is 
-the go-to method for sampling such matrices.
-"""
+
 def noise_generation(center, radius, sample_form, level, hat_dict, worst_dict, coverage, normalize):
     #np.random.seed(42) 
     
@@ -944,32 +935,32 @@ def estimate_shape_parameter(noise, loc, scale, initial_beta=2.0):
     
     return result.x[0]
 
-def lan_abduction_laplace(data, G, coeffs):
-    n_samples, n_vars = data.shape
-    noise = np.zeros((n_samples, n_vars))
-    nodes = list(G.nodes)
+# def lan_abduction_laplace(data, G, coeffs):
+#     n_samples, n_vars = data.shape
+#     noise = np.zeros((n_samples, n_vars))
+#     nodes = list(G.nodes)
     
-    # Calculate residuals same as before
-    for node in nx.topological_sort(G):
-        idx = nodes.index(node)
-        parents = list(G.predecessors(node))
+#     # Calculate residuals same as before
+#     for node in nx.topological_sort(G):
+#         idx = nodes.index(node)
+#         parents = list(G.predecessors(node))
         
-        if not parents:
-            noise[:, idx] = data[:, idx]
-        else:
-            predicted = sum(data[:, nodes.index(p)] * coeffs[(p, node)] 
-                          for p in parents)
-            noise[:, idx] = data[:, idx] - predicted
+#         if not parents:
+#             noise[:, idx] = data[:, idx]
+#         else:
+#             predicted = sum(data[:, nodes.index(p)] * coeffs[(p, node)] 
+#                           for p in parents)
+#             noise[:, idx] = data[:, idx] - predicted
     
-    # Estimate parameters for Multivariate Laplace
-    loc = np.median(noise, axis=0)  # More robust than mean for Laplace
+#     # Estimate parameters for Multivariate Laplace
+#     loc = np.median(noise, axis=0)  # More robust than mean for Laplace
     
-    # Scale parameter for Laplace using MAD
-    # For Laplace, scale = MAD/ln(2)
-    scale = np.median(np.abs(noise - loc), axis=0) / np.log(2)
-    #shape = estimate_shape_parameter(noise, loc, scale)
+#     # Scale parameter for Laplace using MAD
+#     # For Laplace, scale = MAD/ln(2)
+#     scale = np.median(np.abs(noise - loc), axis=0) / np.log(2)
+#     #shape = estimate_shape_parameter(noise, loc, scale)
 
-    return noise, loc, scale
+#     return noise, loc, scale
 
 # def lan_abduction(data, G, coeffs):
 #     """
@@ -1018,268 +1009,245 @@ def lan_abduction_laplace(data, G, coeffs):
 
 #     return U, mean_U, cov_U
 
-def weighted_likelihood(params, X_parents, y, weights, beta=1.5, sigma=1.0):
-    """
-    Custom weighted likelihood function for MLE with Generalized Normal noise.
+# def weighted_likelihood(params, X_parents, y, weights, beta=1.5, sigma=1.0):
+#     """
+#     Custom weighted likelihood function for MLE with Generalized Normal noise.
     
-    Args:
-    - params (ndarray): Coefficients for the linear model.
-    - X_parents (ndarray): Parent data matrix.
-    - y (ndarray): Target data.
-    - weights (ndarray): Weights for each sample.
-    - beta (float): Shape parameter for the Generalized Normal distribution (controls tails).
-    - sigma (float): Scale parameter for the distribution (assumed fixed or can be estimated separately).
+#     Args:
+#     - params (ndarray): Coefficients for the linear model.
+#     - X_parents (ndarray): Parent data matrix.
+#     - y (ndarray): Target data.
+#     - weights (ndarray): Weights for each sample.
+#     - beta (float): Shape parameter for the Generalized Normal distribution (controls tails).
+#     - sigma (float): Scale parameter for the distribution (assumed fixed or can be estimated separately).
     
-    Returns:
-    - weighted_likelihood (float): Weighted negative log-likelihood (to be minimized).
-    """
-    predicted = np.dot(X_parents, params)  # Linear relationship
-    residuals = np.abs(y - predicted)      # Residuals (errors)
+#     Returns:
+#     - weighted_likelihood (float): Weighted negative log-likelihood (to be minimized).
+#     """
+#     predicted = np.dot(X_parents, params)  # Linear relationship
+#     residuals = np.abs(y - predicted)      # Residuals (errors)
 
-    # Generalized normal loss (L_beta loss)
-    loss = np.sum(weights * (residuals / sigma) ** beta)  # Weighted Generalized Normal loss
+#     # Generalized normal loss (L_beta loss)
+#     loss = np.sum(weights * (residuals / sigma) ** beta)  # Weighted Generalized Normal loss
     
-    return loss
+#     return loss
 
-def weighted_likelihood(params, X_parents, y, weights, beta=1.5, sigma=1.0):
-    """
-    Custom weighted likelihood function for MLE with Generalized Normal noise.
+# def get_mle_coefficients(data_list, G, weights=None, beta=1.5, sigma=1.0):
+#     """
+#     Estimates the structural coefficients for the edges in the causal model using MLE with Generalized Normal noise.
     
-    Args:
-    - params (ndarray): Coefficients for the linear model.
-    - X_parents (ndarray): Parent data matrix.
-    - y (ndarray): Target data.
-    - weights (ndarray): Weights for each sample.
-    - beta (float): Shape parameter for the Generalized Normal distribution (controls tails).
-    - sigma (float): Scale parameter for the distribution (assumed fixed or can be estimated separately).
+#     Args:
+#     - data_list (list of ndarray): List of n x k datasets where n is the number of samples and k is the number of variables.
+#     - G (DiGraph): The underlying DAG of the causal model.
+#     - weights (list of float): List of weights corresponding to each dataset (optional).
+#     - beta (float): Shape parameter for the Generalized Normal distribution (default=1.5).
+#     - sigma (float): Scale parameter for the distribution (optional, default=1.0).
     
-    Returns:
-    - weighted_likelihood (float): Weighted negative log-likelihood (to be minimized).
-    """
-    predicted = np.dot(X_parents, params)  # Linear relationship
-    residuals = np.abs(y - predicted)      # Residuals (errors)
+#     Returns:
+#     - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
+#     """
+#     nodes = list(G.nodes)
+#     coeffs = {}
 
-    # Generalized normal loss (L_beta loss)
-    loss = np.sum(weights * (residuals / sigma) ** beta)  # Weighted Generalized Normal loss
-    
-    return loss
+#     if isinstance(data_list, np.ndarray):
+#         data_list = [data_list]
 
-def get_mle_coefficients(data_list, G, weights=None, beta=1.5, sigma=1.0):
-    """
-    Estimates the structural coefficients for the edges in the causal model using MLE with Generalized Normal noise.
-    
-    Args:
-    - data_list (list of ndarray): List of n x k datasets where n is the number of samples and k is the number of variables.
-    - G (DiGraph): The underlying DAG of the causal model.
-    - weights (list of float): List of weights corresponding to each dataset (optional).
-    - beta (float): Shape parameter for the Generalized Normal distribution (default=1.5).
-    - sigma (float): Scale parameter for the distribution (optional, default=1.0).
-    
-    Returns:
-    - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
-    """
-    nodes = list(G.nodes)
-    coeffs = {}
+#     if weights is None:
+#         weights = [1] * len(data_list)
 
-    if isinstance(data_list, np.ndarray):
-        data_list = [data_list]
+#     combined_data = []
+#     sample_weights = []
 
-    if weights is None:
-        weights = [1] * len(data_list)
+#     for data, weight in zip(data_list, weights):
+#         num_samples = data.shape[0]
+#         combined_data.append(data)
+#         sample_weights.extend([weight] * num_samples)
 
-    combined_data = []
-    sample_weights = []
+#     combined_data = np.vstack(combined_data)
+#     sample_weights = np.array(sample_weights)
 
-    for data, weight in zip(data_list, weights):
-        num_samples = data.shape[0]
-        combined_data.append(data)
-        sample_weights.extend([weight] * num_samples)
+#     if sample_weights.shape[0] != combined_data.shape[0]:
+#         raise ValueError("Sample weights shape does not match combined data shape!")
 
-    combined_data = np.vstack(combined_data)
-    sample_weights = np.array(sample_weights)
-
-    if sample_weights.shape[0] != combined_data.shape[0]:
-        raise ValueError("Sample weights shape does not match combined data shape!")
-
-    for node in nx.topological_sort(G):
-        node_idx = nodes.index(node)
-        parents = list(G.predecessors(node))
+#     for node in nx.topological_sort(G):
+#         node_idx = nodes.index(node)
+#         parents = list(G.predecessors(node))
         
-        if parents:
-            parent_indices = [nodes.index(p) for p in parents]
-            X_parents = combined_data[:, parent_indices]
-            y = combined_data[:, node_idx]
+#         if parents:
+#             parent_indices = [nodes.index(p) for p in parents]
+#             X_parents = combined_data[:, parent_indices]
+#             y = combined_data[:, node_idx]
             
-            init_params = np.zeros(len(parents))  # Initial guess for coefficients
+#             init_params = np.zeros(len(parents))  # Initial guess for coefficients
             
-            # Optimize the likelihood using Generalized Normal noise
-            result = minimize(weighted_likelihood, init_params, args=(X_parents, y, sample_weights, beta, sigma), method='Powell')
+#             # Optimize the likelihood using Generalized Normal noise
+#             result = minimize(weighted_likelihood, init_params, args=(X_parents, y, sample_weights, beta, sigma), method='Powell')
             
-            for p, coef in zip(parents, result.x):
-                    coeffs[(p, node)] = coef  # Store as (parent, child) pair
+#             for p, coef in zip(parents, result.x):
+#                     coeffs[(p, node)] = coef  # Store as (parent, child) pair
         
-    return coeffs
+#     return coeffs
 
 
-def weighted_huber_loss(params, X_parents, y, weights, delta=1.0):
-    """
-    Custom weighted likelihood function for MLE using Huber loss to handle noise uncertainty.
+# def weighted_huber_loss(params, X_parents, y, weights, delta=1.0):
+#     """
+#     Custom weighted likelihood function for MLE using Huber loss to handle noise uncertainty.
     
-    Args:
-    - params (ndarray): Coefficients for the linear model.
-    - X_parents (ndarray): Parent data matrix.
-    - y (ndarray): Target data.
-    - weights (ndarray): Weights for each sample.
-    - delta (float): Huber loss parameter; defines the threshold between L1 and L2 losses.
+#     Args:
+#     - params (ndarray): Coefficients for the linear model.
+#     - X_parents (ndarray): Parent data matrix.
+#     - y (ndarray): Target data.
+#     - weights (ndarray): Weights for each sample.
+#     - delta (float): Huber loss parameter; defines the threshold between L1 and L2 losses.
     
-    Returns:
-    - loss (float): Weighted Huber loss.
-    """
-    predicted = np.dot(X_parents, params)  # Linear relationship
-    residuals = y - predicted               # Residuals (errors)
+#     Returns:
+#     - loss (float): Weighted Huber loss.
+#     """
+#     predicted = np.dot(X_parents, params)  # Linear relationship
+#     residuals = y - predicted               # Residuals (errors)
     
-    # Huber loss: Quadratic for small residuals, linear for large residuals
-    loss = np.where(np.abs(residuals) <= delta,
-                    0.5 * residuals**2,  # L2 for small residuals
-                    delta * (np.abs(residuals) - 0.5 * delta))  # L1 for large residuals
+#     # Huber loss: Quadratic for small residuals, linear for large residuals
+#     loss = np.where(np.abs(residuals) <= delta,
+#                     0.5 * residuals**2,  # L2 for small residuals
+#                     delta * (np.abs(residuals) - 0.5 * delta))  # L1 for large residuals
     
-    return np.sum(weights * loss)  # Weighted Huber loss
+#     return np.sum(weights * loss)  # Weighted Huber loss
 
-def get_mle_coefficients_huber(data_list, G, weights=None, delta=1.0):
-    """
-    Estimates the structural coefficients using MLE with Huber loss, robust to unknown noise.
+# def get_mle_coefficients_huber(data_list, G, weights=None, delta=1.0):
+#     """
+#     Estimates the structural coefficients using MLE with Huber loss, robust to unknown noise.
     
-    Args:
-    - data_list (list of ndarray): List of datasets.
-    - G (DiGraph): The underlying DAG of the causal model.
-    - weights (list of float): Weights corresponding to each dataset.
-    - delta (float): Huber loss parameter; defines the threshold between L1 and L2 losses.
+#     Args:
+#     - data_list (list of ndarray): List of datasets.
+#     - G (DiGraph): The underlying DAG of the causal model.
+#     - weights (list of float): Weights corresponding to each dataset.
+#     - delta (float): Huber loss parameter; defines the threshold between L1 and L2 losses.
     
-    Returns:
-    - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
-    """
-    nodes = list(G.nodes)
-    coeffs = {}
+#     Returns:
+#     - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
+#     """
+#     nodes = list(G.nodes)
+#     coeffs = {}
 
-    # Ensure data is a list of datasets
-    if isinstance(data_list, np.ndarray):
-        data_list = [data_list]
+#     # Ensure data is a list of datasets
+#     if isinstance(data_list, np.ndarray):
+#         data_list = [data_list]
 
-    # Default weights to 1 if not provided
-    if weights is None:
-        weights = [1] * len(data_list)
+#     # Default weights to 1 if not provided
+#     if weights is None:
+#         weights = [1] * len(data_list)
 
-    # Combine datasets and create sample weights
-    combined_data = []
-    sample_weights = []
-    for data, weight in zip(data_list, weights):
-        num_samples = data.shape[0]
-        combined_data.append(data)
-        sample_weights.extend([weight] * num_samples)
+#     # Combine datasets and create sample weights
+#     combined_data = []
+#     sample_weights = []
+#     for data, weight in zip(data_list, weights):
+#         num_samples = data.shape[0]
+#         combined_data.append(data)
+#         sample_weights.extend([weight] * num_samples)
 
-    combined_data = np.vstack(combined_data)
-    sample_weights = np.array(sample_weights)
+#     combined_data = np.vstack(combined_data)
+#     sample_weights = np.array(sample_weights)
 
-    for node in nx.topological_sort(G):
-        node_idx = nodes.index(node)
-        parents = list(G.predecessors(node))
+#     for node in nx.topological_sort(G):
+#         node_idx = nodes.index(node)
+#         parents = list(G.predecessors(node))
         
-        if parents:
-            parent_indices = [nodes.index(p) for p in parents]
-            X_parents = combined_data[:, parent_indices]
-            y = combined_data[:, node_idx]
+#         if parents:
+#             parent_indices = [nodes.index(p) for p in parents]
+#             X_parents = combined_data[:, parent_indices]
+#             y = combined_data[:, node_idx]
             
-            init_params = np.zeros(len(parents))  # Initial guess for coefficients
+#             init_params = np.zeros(len(parents))  # Initial guess for coefficients
             
-            # Optimize using Huber loss
-            result = minimize(weighted_huber_loss, init_params, args=(X_parents, y, sample_weights, delta), method='Powell')
+#             # Optimize using Huber loss
+#             result = minimize(weighted_huber_loss, init_params, args=(X_parents, y, sample_weights, delta), method='Powell')
             
-            for p, coef in zip(parents, result.x):
-                coeffs[(p, node)] = coef  # Store as (parent, child) pair
+#             for p, coef in zip(parents, result.x):
+#                 coeffs[(p, node)] = coef  # Store as (parent, child) pair
 
-    return coeffs
+#     return coeffs
 
 
-def weighted_gmm_likelihood(params, X_parents, y, weights, n_components=2):
-    """
-    Custom likelihood function using a Gaussian Mixture Model for the residuals.
+# def weighted_gmm_likelihood(params, X_parents, y, weights, n_components=2):
+#     """
+#     Custom likelihood function using a Gaussian Mixture Model for the residuals.
     
-    Args:
-    - params (ndarray): Coefficients for the linear model.
-    - X_parents (ndarray): Parent data matrix.
-    - y (ndarray): Target data.
-    - weights (ndarray): Weights for each sample.
-    - n_components (int): Number of components in the Gaussian Mixture Model.
+#     Args:
+#     - params (ndarray): Coefficients for the linear model.
+#     - X_parents (ndarray): Parent data matrix.
+#     - y (ndarray): Target data.
+#     - weights (ndarray): Weights for each sample.
+#     - n_components (int): Number of components in the Gaussian Mixture Model.
     
-    Returns:
-    - loss (float): Negative log-likelihood from GMM.
-    """
-    predicted = np.dot(X_parents, params)  # Linear relationship
-    residuals = y - predicted               # Residuals (errors)
+#     Returns:
+#     - loss (float): Negative log-likelihood from GMM.
+#     """
+#     predicted = np.dot(X_parents, params)  # Linear relationship
+#     residuals = y - predicted               # Residuals (errors)
 
-    # Fit a Gaussian Mixture Model to the residuals
-    gmm = GaussianMixture(n_components=n_components)
-    gmm.fit(residuals.reshape(-1, 1))  # Fit GMM on residuals
+#     # Fit a Gaussian Mixture Model to the residuals
+#     gmm = GaussianMixture(n_components=n_components)
+#     gmm.fit(residuals.reshape(-1, 1))  # Fit GMM on residuals
     
-    # Get the log-likelihood of the residuals under the GMM
-    log_likelihood = gmm.score_samples(residuals.reshape(-1, 1))
+#     # Get the log-likelihood of the residuals under the GMM
+#     log_likelihood = gmm.score_samples(residuals.reshape(-1, 1))
     
-    # We minimize the negative log-likelihood weighted by the sample weights
-    return -np.sum(weights * log_likelihood)
+#     # We minimize the negative log-likelihood weighted by the sample weights
+#     return -np.sum(weights * log_likelihood)
 
-def get_mle_coefficients_gmm(data_list, G, weights=None, n_components=2):
-    """
-    Estimates the structural coefficients using MLE with Gaussian Mixture Model for residuals.
+# def get_mle_coefficients_gmm(data_list, G, weights=None, n_components=2):
+#     """
+#     Estimates the structural coefficients using MLE with Gaussian Mixture Model for residuals.
     
-    Args:
-    - data_list (list of ndarray): List of datasets.
-    - G (DiGraph): The underlying DAG of the causal model.
-    - weights (list of float): Weights corresponding to each dataset.
-    - n_components (int): Number of components in the Gaussian Mixture Model.
+#     Args:
+#     - data_list (list of ndarray): List of datasets.
+#     - G (DiGraph): The underlying DAG of the causal model.
+#     - weights (list of float): Weights corresponding to each dataset.
+#     - n_components (int): Number of components in the Gaussian Mixture Model.
     
-    Returns:
-    - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
-    """
-    nodes = list(G.nodes)
-    coeffs = {}
+#     Returns:
+#     - coeffs (dict): Dictionary of estimated structural coefficients for each edge.
+#     """
+#     nodes = list(G.nodes)
+#     coeffs = {}
 
-    # Ensure data is a list of datasets
-    if isinstance(data_list, np.ndarray):
-        data_list = [data_list]
+#     # Ensure data is a list of datasets
+#     if isinstance(data_list, np.ndarray):
+#         data_list = [data_list]
 
-    # Default weights to 1 if not provided
-    if weights is None:
-        weights = [1] * len(data_list)
+#     # Default weights to 1 if not provided
+#     if weights is None:
+#         weights = [1] * len(data_list)
 
-    # Combine datasets and create sample weights
-    combined_data = []
-    sample_weights = []
-    for data, weight in zip(data_list, weights):
-        num_samples = data.shape[0]
-        combined_data.append(data)
-        sample_weights.extend([weight] * num_samples)
+#     # Combine datasets and create sample weights
+#     combined_data = []
+#     sample_weights = []
+#     for data, weight in zip(data_list, weights):
+#         num_samples = data.shape[0]
+#         combined_data.append(data)
+#         sample_weights.extend([weight] * num_samples)
 
-    combined_data = np.vstack(combined_data)
-    sample_weights = np.array(sample_weights)
+#     combined_data = np.vstack(combined_data)
+#     sample_weights = np.array(sample_weights)
 
-    for node in nx.topological_sort(G):
-        node_idx = nodes.index(node)
-        parents = list(G.predecessors(node))
+#     for node in nx.topological_sort(G):
+#         node_idx = nodes.index(node)
+#         parents = list(G.predecessors(node))
         
-        if parents:
-            parent_indices = [nodes.index(p) for p in parents]
-            X_parents = combined_data[:, parent_indices]
-            y = combined_data[:, node_idx]
+#         if parents:
+#             parent_indices = [nodes.index(p) for p in parents]
+#             X_parents = combined_data[:, parent_indices]
+#             y = combined_data[:, node_idx]
             
-            init_params = np.zeros(len(parents))  # Initial guess for coefficients
+#             init_params = np.zeros(len(parents))  # Initial guess for coefficients
             
-            # Optimize using Gaussian Mixture Model for residuals
-            result = minimize(weighted_gmm_likelihood, init_params, args=(X_parents, y, sample_weights, n_components), method='Powell')
+#             # Optimize using Gaussian Mixture Model for residuals
+#             result = minimize(weighted_gmm_likelihood, init_params, args=(X_parents, y, sample_weights, n_components), method='Powell')
             
-            for p, coef in zip(parents, result.x):
-                coeffs[(p, node)] = coef  # Store as (parent, child) pair
+#             for p, coef in zip(parents, result.x):
+#                 coeffs[(p, node)] = coef  # Store as (parent, child) pair
 
-    return coeffs
+#     return coeffs
 
 
 ############################# LOADERS #############################

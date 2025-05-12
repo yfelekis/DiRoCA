@@ -34,23 +34,23 @@ def compute_worst_case_distance(params_worst):
     
     return G_squared
 
-def condition_number(matrix):
-    """
-    Computes the condition number of a matrix using the 2-norm.
+# def condition_number(matrix):
+#     """
+#     Computes the condition number of a matrix using the 2-norm.
 
-    Parameters:
-        matrix (np.ndarray): Input matrix (can be square or rectangular).
+#     Parameters:
+#         matrix (np.ndarray): Input matrix (can be square or rectangular).
 
-    Returns:
-        float: The condition number of the matrix.
-    """
-    # Compute the singular values of the matrix
-    singular_values = np.linalg.svd(matrix, compute_uv=False)
+#     Returns:
+#         float: The condition number of the matrix.
+#     """
+#     # Compute the singular values of the matrix
+#     singular_values = np.linalg.svd(matrix, compute_uv=False)
 
-    # Condition number is the ratio of the largest to smallest singular value
-    cond_number = singular_values.max() / singular_values.min()
+#     # Condition number is the ratio of the largest to smallest singular value
+#     cond_number = singular_values.max() / singular_values.min()
 
-    return cond_number
+#     return cond_number
 
 def contaminate_linear_relationships(data, contamination_fraction, contamination_type, k=1.345):
     """
@@ -360,258 +360,258 @@ def plot_empirical_abstraction_error(results, methods, sample_form, figsize=(12,
     
     plt.show()
 
-def plot_condition_nums(cn_dict, spacing_factor=0.2):
-    """
-    Plot condition numbers with consistent spacing logic.
-    """
-    # Extract data from dictionary
-    methods = list(cn_dict.keys())
-    condition_number = [v for v in cn_dict.values()]
+# def plot_condition_nums(cn_dict, spacing_factor=0.2):
+#     """
+#     Plot condition numbers with consistent spacing logic.
+#     """
+#     # Extract data from dictionary
+#     methods = list(cn_dict.keys())
+#     condition_number = [v for v in cn_dict.values()]
     
-    # Calculate width first
-    width = max(4, len(methods) * spacing_factor)
+#     # Calculate width first
+#     width = max(4, len(methods) * spacing_factor)
     
-    # Set style and font sizes with LaTeX
-    sns.set_style("whitegrid")
-    plt.rcParams.update({
-        'text.usetex': True,
-        'font.family': 'serif',
-        'font.serif': ['Computer Modern Roman'],
-        'font.size': 14,
-        'axes.titlesize': 16,
-        'axes.labelsize': 14,
-        'xtick.labelsize': 10,
-        'ytick.labelsize': 10,
-        'xtick.color': 'black',
-        'ytick.color': 'black',
-        'figure.dpi': 300,  # Increase DPI
-        'savefig.dpi': 300,  # Increase saving DPI
-        'figure.figsize': (width, 5),
-        'figure.facecolor': 'white',
-        'figure.edgecolor': 'white',
-        'text.antialiased': True,
-        'axes.linewidth': 0.5
-    })
+#     # Set style and font sizes with LaTeX
+#     sns.set_style("whitegrid")
+#     plt.rcParams.update({
+#         'text.usetex': True,
+#         'font.family': 'serif',
+#         'font.serif': ['Computer Modern Roman'],
+#         'font.size': 14,
+#         'axes.titlesize': 16,
+#         'axes.labelsize': 14,
+#         'xtick.labelsize': 10,
+#         'ytick.labelsize': 10,
+#         'xtick.color': 'black',
+#         'ytick.color': 'black',
+#         'figure.dpi': 300,  # Increase DPI
+#         'savefig.dpi': 300,  # Increase saving DPI
+#         'figure.figsize': (width, 5),
+#         'figure.facecolor': 'white',
+#         'figure.edgecolor': 'white',
+#         'text.antialiased': True,
+#         'axes.linewidth': 0.5
+#     })
     
-    # Create figure with higher quality
-    plt.figure(figsize=(width, 5), dpi=100)
+#     # Create figure with higher quality
+#     plt.figure(figsize=(width, 5), dpi=100)
     
-    # Create scatter plot
-    sns.scatterplot(
-        x=range(len(methods)),
-        y=condition_number,
-        color='purple',
-        s=200
-    )
+#     # Create scatter plot
+#     sns.scatterplot(
+#         x=range(len(methods)),
+#         y=condition_number,
+#         color='purple',
+#         s=200
+#     )
     
-    # Add markers
-    plt.errorbar(
-        x=range(len(methods)),
-        y=condition_number,
-        yerr=None,
-        fmt='o',
-        color='purple',
-        capsize=5,
-        capthick=5,
-        elinewidth=2
-    )
+#     # Add markers
+#     plt.errorbar(
+#         x=range(len(methods)),
+#         y=condition_number,
+#         yerr=None,
+#         fmt='o',
+#         color='purple',
+#         capsize=5,
+#         capthick=5,
+#         elinewidth=2
+#     )
     
-    # Customize plot with tighter spacing
-    plt.yscale('log')
-    plt.xticks(
-        range(len(methods)),
-        methods,
-        rotation=45,
-        ha='right'
-    )
+#     # Customize plot with tighter spacing
+#     plt.yscale('log')
+#     plt.xticks(
+#         range(len(methods)),
+#         methods,
+#         rotation=45,
+#         ha='right'
+#     )
     
-    plt.margins(x=0.1)
-    plt.title('')  # Removed title as in previous function
-    plt.xlabel(r'Method')
-    plt.ylabel(r'$\kappa(T)$')  # Using LaTeX for condition number symbol
+#     plt.margins(x=0.1)
+#     plt.title('')  # Removed title as in previous function
+#     plt.xlabel(r'Method')
+#     plt.ylabel(r'$\kappa(T)$')  # Using LaTeX for condition number symbol
     
-    plt.tight_layout(pad=1.0)
-    plt.show()
-    return
+#     plt.tight_layout(pad=1.0)
+#     plt.show()
+#     return
 
-def plot_distribution_shifts(original, modified):
-    """
-    Visualize the changes in distributions using Seaborn.
-    """    
-    n_vars = original.shape[1]
-    plt.figure(figsize=(15, 5))
+# def plot_distribution_shifts(original, modified):
+#     """
+#     Visualize the changes in distributions using Seaborn.
+#     """    
+#     n_vars = original.shape[1]
+#     plt.figure(figsize=(15, 5))
     
-    for i in range(n_vars):
-        plt.subplot(1, n_vars, i+1)
+#     for i in range(n_vars):
+#         plt.subplot(1, n_vars, i+1)
         
-        # Plot original distribution with Seaborn (purple)
-        sns.kdeplot(data=original[:, i], 
-                   color='green', 
-                   alpha=0.5,
-                   label=f'Original (μ={np.mean(original[:, i]):.2f}, σ²={np.var(original[:, i]):.2f})',
-                   fill=True)
+#         # Plot original distribution with Seaborn (purple)
+#         sns.kdeplot(data=original[:, i], 
+#                    color='green', 
+#                    alpha=0.5,
+#                    label=f'Original (μ={np.mean(original[:, i]):.2f}, σ²={np.var(original[:, i]):.2f})',
+#                    fill=True)
         
-        # Plot modified distribution with Seaborn (green)
-        sns.kdeplot(data=modified[:, i], 
-                   color='purple', 
-                   alpha=0.5,
-                   label=f'Modified (μ={np.mean(modified[:, i]):.2f}, σ²={np.var(modified[:, i]):.2f})',
-                   fill=True)
+#         # Plot modified distribution with Seaborn (green)
+#         sns.kdeplot(data=modified[:, i], 
+#                    color='purple', 
+#                    alpha=0.5,
+#                    label=f'Modified (μ={np.mean(modified[:, i]):.2f}, σ²={np.var(modified[:, i]):.2f})',
+#                    fill=True)
         
-        plt.title(f'Variable {i+1} Distribution')
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+#         plt.title(f'Variable {i+1} Distribution')
+#         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     
-    plt.tight_layout()
-    plt.show()
+#     plt.tight_layout()
+#     plt.show()
     
-def plot_distribution_changes(original, modified, title="Distribution Changes"):
-    """
-    Visualize the changes in marginal distributions for each dimension.
+# def plot_distribution_changes(original, modified, title="Distribution Changes"):
+#     """
+#     Visualize the changes in marginal distributions for each dimension.
     
-    Args:
-        original: Original data array of shape (n_samples, n_dims)
-        modified: Modified data array of shape (n_samples, n_dims)
-        title: Optional title for the plot
-    """
-    n_vars = original.shape[1]
-    fig = plt.figure(figsize=(15, 5))
+#     Args:
+#         original: Original data array of shape (n_samples, n_dims)
+#         modified: Modified data array of shape (n_samples, n_dims)
+#         title: Optional title for the plot
+#     """
+#     n_vars = original.shape[1]
+#     fig = plt.figure(figsize=(15, 5))
     
-    for i in range(n_vars):
-        plt.subplot(1, n_vars, i+1)
+#     for i in range(n_vars):
+#         plt.subplot(1, n_vars, i+1)
         
-        # Plot original distribution
-        plt.hist(original[:, i], bins=50, alpha=0.5, color='lightblue',
-                label=f'Original (μ={np.mean(original[:, i]):.2f}, σ²={np.var(original[:, i]):.2f})', 
-                density=True)
+#         # Plot original distribution
+#         plt.hist(original[:, i], bins=50, alpha=0.5, color='lightblue',
+#                 label=f'Original (μ={np.mean(original[:, i]):.2f}, σ²={np.var(original[:, i]):.2f})', 
+#                 density=True)
         
-        # Plot modified distribution
-        plt.hist(modified[:, i], bins=50, alpha=0.5, color='orange',
-                label=f'Modified (μ={np.mean(modified[:, i]):.2f}, σ²={np.var(modified[:, i]):.2f})', 
-                density=True)
+#         # Plot modified distribution
+#         plt.hist(modified[:, i], bins=50, alpha=0.5, color='orange',
+#                 label=f'Modified (μ={np.mean(modified[:, i]):.2f}, σ²={np.var(modified[:, i]):.2f})', 
+#                 density=True)
         
-        plt.title(f'Variable {i+1} Distribution')
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+#         plt.title(f'Variable {i+1} Distribution')
+#         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     
-    plt.tight_layout()
-    plt.show()
+#     plt.tight_layout()
+#     plt.show()
 
-def generate_noise(shape, noise_type, form, level, experiment, normalize, rad=None):
-    n_samples, n_vars = shape
+# def generate_noise(shape, noise_type, form, level, experiment, normalize, rad=None):
+#     n_samples, n_vars = shape
     
-    if noise_type in ['gelbrich_gaussian', 'boundary_gaussian', 'rand_epsilon_delta', 'gelbrich_boundary_gaussian']:
-        params = mut.load_type_to_params(experiment, noise_type, level)
+#     if noise_type in ['gelbrich_gaussian', 'boundary_gaussian', 'rand_epsilon_delta', 'gelbrich_boundary_gaussian']:
+#         params = mut.load_type_to_params(experiment, noise_type, level)
             
-    if noise_type == 'gelbrich_gaussian':
+#     if noise_type == 'gelbrich_gaussian':
 
-        mu_U_hat    = params['mu_U'] #+ np.ones(params_Lerica['mu_U'].shape[0])
-        Sigma_U_hat = params['Sigma_U'] #+ np.random.normal(0, 0.1, size=params_Lerica['Sigma_U'].shape)
-        radius      = params['radius']
+#         mu_U_hat    = params['mu_U'] #+ np.ones(params_Lerica['mu_U'].shape[0])
+#         Sigma_U_hat = params['Sigma_U'] #+ np.random.normal(0, 0.1, size=params_Lerica['Sigma_U'].shape)
+#         radius      = params['radius']
 
-        # Sample moments from Gelbrich ball
-        moments = mut.sample_moments_U(
-                                        mu_hat=mu_U_hat, 
-                                        Sigma_hat=Sigma_U_hat, 
-                                        bound=radius, 
-                                        num_envs=1
-                                      )
+#         # Sample moments from Gelbrich ball
+#         moments = mut.sample_moments_U(
+#                                         mu_hat=mu_U_hat, 
+#                                         Sigma_hat=Sigma_U_hat, 
+#                                         bound=radius, 
+#                                         num_envs=1
+#                                       )
         
-        noise_mu, noise_Sigma = moments[0]
+#         noise_mu, noise_Sigma = moments[0]
 
-        noise = np.random.multivariate_normal(
-                                                mean=noise_mu, 
-                                                cov=noise_Sigma, 
-                                                size=n_samples
-                                                )
+#         noise = np.random.multivariate_normal(
+#                                                 mean=noise_mu, 
+#                                                 cov=noise_Sigma, 
+#                                                 size=n_samples
+#                                                 )
 
-    elif noise_type == 'boundary_gaussian':
-        noise_mu, noise_Sigma = params['mu_U'], params['Sigma_U']
+#     elif noise_type == 'boundary_gaussian':
+#         noise_mu, noise_Sigma = params['mu_U'], params['Sigma_U']
 
-        noise = np.random.multivariate_normal(
-                                                mean=noise_mu, 
-                                                cov=noise_Sigma, 
-                                                size=n_samples
-                                                )
+#         noise = np.random.multivariate_normal(
+#                                                 mean=noise_mu, 
+#                                                 cov=noise_Sigma, 
+#                                                 size=n_samples
+#                                                 )
     
-    elif noise_type == 'rand_epsilon_delta':
-        mu_U_hat    = params['mu_U'] #+ np.ones(params_Lerica['mu_U'].shape[0])
-        Sigma_U_hat = params['Sigma_U'] #+ np.random.normal(0, 0.1, size=params_Lerica['Sigma_U'].shape)
-        radius      = rad
+#     elif noise_type == 'rand_epsilon_delta':
+#         mu_U_hat    = params['mu_U'] #+ np.ones(params_Lerica['mu_U'].shape[0])
+#         Sigma_U_hat = params['Sigma_U'] #+ np.random.normal(0, 0.1, size=params_Lerica['Sigma_U'].shape)
+#         radius      = rad
         
 
-        # Sample moments from Gelbrich ball
-        moments = mut.sample_moments_U(
-                                        mu_hat=mu_U_hat, 
-                                        Sigma_hat=Sigma_U_hat, 
-                                        bound=radius, 
-                                        num_envs=1
-                                        )
+#         # Sample moments from Gelbrich ball
+#         moments = mut.sample_moments_U(
+#                                         mu_hat=mu_U_hat, 
+#                                         Sigma_hat=Sigma_U_hat, 
+#                                         bound=radius, 
+#                                         num_envs=1
+#                                         )
         
-        noise_mu, noise_Sigma = moments[0]
+#         noise_mu, noise_Sigma = moments[0]
 
-        noise = np.random.multivariate_normal(
-                                                mean=noise_mu, 
-                                                cov=noise_Sigma, 
-                                                size=n_samples
-                                                )
+#         noise = np.random.multivariate_normal(
+#                                                 mean=noise_mu, 
+#                                                 cov=noise_Sigma, 
+#                                                 size=n_samples
+#                                                 )
         
-    elif noise_type == 'gelbrich_boundary_gaussian':
+#     elif noise_type == 'gelbrich_boundary_gaussian':
 
-        mu_U_hat    = params['mu_U'] #+ np.ones(params_Lerica['mu_U'].shape[0])
-        Sigma_U_hat = params['Sigma_U'] #+ np.random.normal(0, 0.1, size=params_Lerica['Sigma_U'].shape)
-        radius      = rad
-        random_mu   = np.random.randn(n_vars)
-        random_Sigma = np.diag(np.random.rand(n_vars))
+#         mu_U_hat    = params['mu_U'] #+ np.ones(params_Lerica['mu_U'].shape[0])
+#         Sigma_U_hat = params['Sigma_U'] #+ np.random.normal(0, 0.1, size=params_Lerica['Sigma_U'].shape)
+#         radius      = rad
+#         random_mu   = np.random.randn(n_vars)
+#         random_Sigma = np.diag(np.random.rand(n_vars))
 
-        # Convert to PyTorch tensors before calling get_gelbrich_boundary
-        random_mu_tensor = torch.tensor(random_mu, dtype=torch.float32)
-        random_Sigma_tensor = torch.tensor(random_Sigma, dtype=torch.float32)
-        mu_U_hat_tensor = torch.tensor(mu_U_hat, dtype=torch.float32)
-        Sigma_U_hat_tensor = torch.tensor(Sigma_U_hat, dtype=torch.float32)
+#         # Convert to PyTorch tensors before calling get_gelbrich_boundary
+#         random_mu_tensor = torch.tensor(random_mu, dtype=torch.float32)
+#         random_Sigma_tensor = torch.tensor(random_Sigma, dtype=torch.float32)
+#         mu_U_hat_tensor = torch.tensor(mu_U_hat, dtype=torch.float32)
+#         Sigma_U_hat_tensor = torch.tensor(Sigma_U_hat, dtype=torch.float32)
 
-        noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu_tensor, random_Sigma_tensor, mu_U_hat_tensor, Sigma_U_hat_tensor, radius)
+#         noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu_tensor, random_Sigma_tensor, mu_U_hat_tensor, Sigma_U_hat_tensor, radius)
         
-        noise = np.random.multivariate_normal(
-                                                mean=noise_mu, 
-                                                cov=noise_Sigma, 
-                                                size=n_samples
-                                                )
-    # Generate noise based on type
-    elif noise_type == 'uniform':
-        noise = np.random.uniform(low=-1, high=1, size=(n_samples, n_vars))
+#         noise = np.random.multivariate_normal(
+#                                                 mean=noise_mu, 
+#                                                 cov=noise_Sigma, 
+#                                                 size=n_samples
+#                                                 )
+#     # Generate noise based on type
+#     elif noise_type == 'uniform':
+#         noise = np.random.uniform(low=-1, high=1, size=(n_samples, n_vars))
     
-    elif noise_type == 'exponential':
-        noise = np.random.exponential(scale=4.0, size=(n_samples, n_vars))
-        noise = noise - 1  # Center to mean 0
+#     elif noise_type == 'exponential':
+#         noise = np.random.exponential(scale=4.0, size=(n_samples, n_vars))
+#         noise = noise - 1  # Center to mean 0
     
-    elif noise_type == 'laplace':
-        noise = np.random.laplace(loc=0.5, scale=2.0, size=(n_samples, n_vars))
+#     elif noise_type == 'laplace':
+#         noise = np.random.laplace(loc=0.5, scale=2.0, size=(n_samples, n_vars))
     
-    elif noise_type == 'chi_square':
-        noise = np.random.chisquare(df=1, size=(n_samples, n_vars))
-        noise = noise - 1  # Center to mean 0
+#     elif noise_type == 'chi_square':
+#         noise = np.random.chisquare(df=1, size=(n_samples, n_vars))
+#         noise = noise - 1  # Center to mean 0
     
-    elif noise_type == 'random_normal':
-        low, high = (-2, 2)
-        noise_mu = np.random.uniform(low=low, high=high, size=n_vars)
-        noise_Sigma = np.diag(np.random.uniform(0, high, size=n_vars))
+#     elif noise_type == 'random_normal':
+#         low, high = (-2, 2)
+#         noise_mu = np.random.uniform(low=low, high=high, size=n_vars)
+#         noise_Sigma = np.diag(np.random.uniform(0, high, size=n_vars))
 
-        noise = np.random.multivariate_normal(
-                                                mean=noise_mu, 
-                                                cov=noise_Sigma, 
-                                                size=n_samples
-                                                )
-    else:
-        raise ValueError(f"Unknown noise type: {noise_type}")
+#         noise = np.random.multivariate_normal(
+#                                                 mean=noise_mu, 
+#                                                 cov=noise_Sigma, 
+#                                                 size=n_samples
+#                                                 )
+#     else:
+#         raise ValueError(f"Unknown noise type: {noise_type}")
     
-    # Normalize noise to have similar scale
-    if normalize == True:
-        noise = noise / np.std(noise, axis=0)
+#     # Normalize noise to have similar scale
+#     if normalize == True:
+#         noise = noise / np.std(noise, axis=0)
 
-    if form == 'sample':
-        return noise
+#     if form == 'sample':
+#         return noise
     
-    elif form == 'distributional':
-        return noise_mu, noise_Sigma
+#     elif form == 'distributional':
+#         return noise_mu, noise_Sigma
 
 def load_optimization_params(experiment, level, method='erica'):
     save_dir = f"data/{experiment}/{method}"
@@ -625,223 +625,223 @@ def load_optimization_params(experiment, level, method='erica'):
         print(f"No saved parameters found in {save_dir}/opt_params.pkl")
         return None, None
     
-def generate_noise2(center, radius, sample_form, level, experiment, normalize, rad=None):
-    params = load_optimization_params(experiment, level)
-    n_vars = params['mu_hat'].shape[0]
-    #np.random.seed(seed) NEED FOR THE RADIUS VS ERROR?
-    if center == 'hat':
-        mu = params['mu_hat']
-        Sigma = params['Sigma_hat']
-    elif center == 'worst':
-        mu = params['mu_U']
-        Sigma = params['Sigma_U']
-    else:
-        raise ValueError(f"Unknown center: {center}")
+# def generate_noise2(center, radius, sample_form, level, experiment, normalize, rad=None):
+#     params = load_optimization_params(experiment, level)
+#     n_vars = params['mu_hat'].shape[0]
+#     #np.random.seed(seed) NEED FOR THE RADIUS VS ERROR?
+#     if center == 'hat':
+#         mu = params['mu_hat']
+#         Sigma = params['Sigma_hat']
+#     elif center == 'worst':
+#         mu = params['mu_U']
+#         Sigma = params['Sigma_U']
+#     else:
+#         raise ValueError(f"Unknown center: {center}")
     
-    if radius == 'hat':
-        radius = params['radius']
-    elif radius == 'random':
-        radius = rad
-    elif radius == 'worst':
-        radius = params['g_squared']
-    else:
-        raise ValueError(f"Unknown radius: {radius}")
+#     if radius == 'hat':
+#         radius = params['radius']
+#     elif radius == 'random':
+#         radius = rad
+#     elif radius == 'worst':
+#         radius = params['g_squared']
+#     else:
+#         raise ValueError(f"Unknown radius: {radius}")
     
-    if sample_form == 'boundary':
-        random_mu    = np.random.randn(n_vars)
-        random_Sigma = np.diag(np.random.rand(n_vars)) 
+#     if sample_form == 'boundary':
+#         random_mu    = np.random.randn(n_vars)
+#         random_Sigma = np.diag(np.random.rand(n_vars)) 
 
-        noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu, Sigma, radius)
+#         noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu, Sigma, radius)
         
-    elif sample_form == 'sample':
-        noise_mu, noise_Sigma = mut.sample_moments_U(mu, Sigma, bound=radius, num_envs=1)[0]
-    else:
-        raise ValueError(f"Unknown sample form: {sample_form}")
+#     elif sample_form == 'sample':
+#         noise_mu, noise_Sigma = mut.sample_moments_U(mu, Sigma, bound=radius, num_envs=1)[0]
+#     else:
+#         raise ValueError(f"Unknown sample form: {sample_form}")
     
-    if normalize:
-        # Convert to numpy if tensor
-        if torch.is_tensor(noise_mu):
-            noise_mu = noise_mu.numpy()
-        if torch.is_tensor(noise_Sigma):
-            noise_Sigma = noise_Sigma.numpy()
+#     if normalize:
+#         # Convert to numpy if tensor
+#         if torch.is_tensor(noise_mu):
+#             noise_mu = noise_mu.numpy()
+#         if torch.is_tensor(noise_Sigma):
+#             noise_Sigma = noise_Sigma.numpy()
             
-        # Normalize using numpy
-        noise_mu = noise_mu / np.std(noise_mu)
-        noise_Sigma = noise_Sigma / np.std(noise_Sigma)
+#         # Normalize using numpy
+#         noise_mu = noise_mu / np.std(noise_mu)
+#         noise_Sigma = noise_Sigma / np.std(noise_Sigma)
 
-    # Convert to numpy if still tensor
-    if torch.is_tensor(noise_mu):
-        noise_mu = noise_mu.numpy()
-    if torch.is_tensor(noise_Sigma):
-        noise_Sigma = noise_Sigma.numpy()
+#     # Convert to numpy if still tensor
+#     if torch.is_tensor(noise_mu):
+#         noise_mu = noise_mu.numpy()
+#     if torch.is_tensor(noise_Sigma):
+#         noise_Sigma = noise_Sigma.numpy()
 
-    return noise_mu, noise_Sigma
+#     return noise_mu, noise_Sigma
 
-def generate_noise_fixed(n_samples, noise_type, form, level, experiment, normalize, rad=None):
+# def generate_noise_fixed(n_samples, noise_type, form, level, experiment, normalize, rad=None):
 
-    params = load_optimization_params(experiment, level)
-    n_vars = params['mu_hat'].shape[0]
+#     params = load_optimization_params(experiment, level)
+#     n_vars = params['mu_hat'].shape[0]
 
-    if noise_type == 'gelbrich_fixed_hat': # Sample moments from the Gelbrich ball centered at theta_hat
+#     if noise_type == 'gelbrich_fixed_hat': # Sample moments from the Gelbrich ball centered at theta_hat
 
-        mu     = params['mu_hat'] 
-        Sigma  = params['Sigma_hat']
-        radius = params['radius']
+#         mu     = params['mu_hat'] 
+#         Sigma  = params['Sigma_hat']
+#         radius = params['radius']
 
-        # Sample moments from Gelbrich ball
-        noise_mu, noise_Sigma = mut.sample_moments_U(mu, Sigma, bound=radius, num_envs=1)[0]
+#         # Sample moments from Gelbrich ball
+#         noise_mu, noise_Sigma = mut.sample_moments_U(mu, Sigma, bound=radius, num_envs=1)[0]
         
-        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+#         noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
 
-    elif noise_type == 'gelbrich_boundary_hat': # Sample moments from the boundary of the Gelbrich ball centered at theta_hat
+#     elif noise_type == 'gelbrich_boundary_hat': # Sample moments from the boundary of the Gelbrich ball centered at theta_hat
 
-        mu     = params['mu_hat'] 
-        Sigma  = params['Sigma_hat'] 
-        radius = params['g_squared']
+#         mu     = params['mu_hat'] 
+#         Sigma  = params['Sigma_hat'] 
+#         radius = params['g_squared']
         
-        random_mu    = np.random.randn(n_vars)
-        random_Sigma = np.diag(np.random.rand(n_vars))
+#         random_mu    = np.random.randn(n_vars)
+#         random_Sigma = np.diag(np.random.rand(n_vars))
     
-        noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu, Sigma, radius)
+#         noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu, Sigma, radius)
         
-        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+#         noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
 
-    elif noise_type == 'gelbrich_boundary_worst': # Sample moments from the boundary of the Gelbrich ball centered at theta_worst
+#     elif noise_type == 'gelbrich_boundary_worst': # Sample moments from the boundary of the Gelbrich ball centered at theta_worst
 
-        mu     = params['mu_U'] 
-        Sigma  = params['Sigma_U'] 
-        radius = params['g_squared']
-        random_mu   = np.random.randn(n_vars)
-        random_Sigma = np.diag(np.random.rand(n_vars))
+#         mu     = params['mu_U'] 
+#         Sigma  = params['Sigma_U'] 
+#         radius = params['g_squared']
+#         random_mu   = np.random.randn(n_vars)
+#         random_Sigma = np.diag(np.random.rand(n_vars))
     
-        noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu, Sigma, radius)
+#         noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu, Sigma, radius)
         
-        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+#         noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
 
-    elif noise_type == 'gelbrich_random_hat': # Sample moments from Gelbrich ball centered at theta_hat
-        mu     = params['mu_hat'] 
-        Sigma  = params['Sigma_hat']
-        radius = rad
+#     elif noise_type == 'gelbrich_random_hat': # Sample moments from Gelbrich ball centered at theta_hat
+#         mu     = params['mu_hat'] 
+#         Sigma  = params['Sigma_hat']
+#         radius = rad
 
-        noise_mu, noise_Sigma = mut.sample_moments_U(mu, Sigma, bound=radius, num_envs=1)[0]
+#         noise_mu, noise_Sigma = mut.sample_moments_U(mu, Sigma, bound=radius, num_envs=1)[0]
         
-        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+#         noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
     
-    elif noise_type == 'gelbrich_random_worst': # Sample moments from Gelbrich ball centered at theta_worst
-        mu     = params['mu_U'] 
-        Sigma  = params['Sigma_U']
-        radius = rad
+#     elif noise_type == 'gelbrich_random_worst': # Sample moments from Gelbrich ball centered at theta_worst
+#         mu     = params['mu_U'] 
+#         Sigma  = params['Sigma_U']
+#         radius = rad
         
-        noise_mu, noise_Sigma = mut.sample_moments_U(mu, Sigma, bound=radius, num_envs=1)[0]
+#         noise_mu, noise_Sigma = mut.sample_moments_U(mu, Sigma, bound=radius, num_envs=1)[0]
         
-        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+#         noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
 
-    elif noise_type == 'boundary_fixed_worst': # Return theta_worst
-        noise_mu, noise_Sigma = params['mu_U'], params['Sigma_U']
+#     elif noise_type == 'boundary_fixed_worst': # Return theta_worst
+#         noise_mu, noise_Sigma = params['mu_U'], params['Sigma_U']
 
-        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+#         noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
 
-    elif noise_type == 'gelbrich_boundary_gaussian':
+#     elif noise_type == 'gelbrich_boundary_gaussian':
 
-        mu_U_hat     = params['mu_hat'] 
-        Sigma_U_hat  = params['Sigma_hat'] 
-        radius       = params['g_squared']
-        random_mu    = np.random.randn(n_vars)
-        random_Sigma = np.diag(np.random.rand(n_vars))
+#         mu_U_hat     = params['mu_hat'] 
+#         Sigma_U_hat  = params['Sigma_hat'] 
+#         radius       = params['g_squared']
+#         random_mu    = np.random.randn(n_vars)
+#         random_Sigma = np.diag(np.random.rand(n_vars))
     
-        noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu_U_hat, Sigma_U_hat, radius)
+#         noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu_U_hat, Sigma_U_hat, radius)
         
-        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+#         noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
 
-    elif noise_type == 'gelbrich_boundary_gaussian2':
+#     elif noise_type == 'gelbrich_boundary_gaussian2':
 
-        mu_U_hat     = params['mu_U'] 
-        Sigma_U_hat  = params['Sigma_U'] 
-        radius       = rad
-        random_mu    = np.random.randn(n_vars)
-        random_Sigma = np.diag(np.random.rand(n_vars))
-
-
-        # Convert to PyTorch tensors before calling get_gelbrich_boundary
-        random_mu_tensor = torch.tensor(random_mu, dtype=torch.float32)
-        random_Sigma_tensor = torch.tensor(random_Sigma, dtype=torch.float32)
-        mu_U_hat_tensor = torch.tensor(mu_U_hat, dtype=torch.float32)
-        Sigma_U_hat_tensor = torch.tensor(Sigma_U_hat, dtype=torch.float32)
-
-        noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu_tensor, random_Sigma_tensor, mu_U_hat_tensor, Sigma_U_hat_tensor, radius)
+#         mu_U_hat     = params['mu_U'] 
+#         Sigma_U_hat  = params['Sigma_U'] 
+#         radius       = rad
+#         random_mu    = np.random.randn(n_vars)
+#         random_Sigma = np.diag(np.random.rand(n_vars))
 
 
-        #noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu_U_hat, Sigma_U_hat, radius)
+#         # Convert to PyTorch tensors before calling get_gelbrich_boundary
+#         random_mu_tensor = torch.tensor(random_mu, dtype=torch.float32)
+#         random_Sigma_tensor = torch.tensor(random_Sigma, dtype=torch.float32)
+#         mu_U_hat_tensor = torch.tensor(mu_U_hat, dtype=torch.float32)
+#         Sigma_U_hat_tensor = torch.tensor(Sigma_U_hat, dtype=torch.float32)
+
+#         noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu_tensor, random_Sigma_tensor, mu_U_hat_tensor, Sigma_U_hat_tensor, radius)
+
+
+#         #noise_mu, noise_Sigma = oput.get_gelbrich_boundary(random_mu, random_Sigma, mu_U_hat, Sigma_U_hat, radius)
         
-        noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
+#         noise = np.random.multivariate_normal(mean=noise_mu, cov=noise_Sigma, size=n_samples)
 
-    else:
-        raise ValueError(f"Unknown noise type: {noise_type}")
+#     else:
+#         raise ValueError(f"Unknown noise type: {noise_type}")
     
-    # Normalize noise to have similar scale
-    if normalize == True:
-        noise = noise / np.std(noise, axis=0)
+#     # Normalize noise to have similar scale
+#     if normalize == True:
+#         noise = noise / np.std(noise, axis=0)
 
-    if form == 'sample':
-        return noise
+#     if form == 'sample':
+#         return noise
     
-    elif form == 'distributional':
-        return noise_mu, noise_Sigma
+#     elif form == 'distributional':
+#         return noise_mu, noise_Sigma
     
-def generate_pertubation11(data, pert_type, pert_level, experiment):
-    N, n = data.shape
+# def generate_pertubation11(data, pert_type, pert_level, experiment):
+#     N, n = data.shape
     
-    boundary_matrix, radius = mut.load_empirical_boundary_params(experiment, pert_level)
-    if pert_type == 'constraint_set':
-        P = oput.init_in_frobenius_ball((N, n), radius).detach().numpy()
+#     boundary_matrix, radius = mut.load_empirical_boundary_params(experiment, pert_level)
+#     if pert_type == 'constraint_set':
+#         P = oput.init_in_frobenius_ball((N, n), radius).detach().numpy()
 
-    elif pert_type == 'boundary':
-        P = boundary_matrix
+#     elif pert_type == 'boundary':
+#         P = boundary_matrix
 
-    elif pert_type == 'random_normal':
-        P = np.random.randn(N, n)
+#     elif pert_type == 'random_normal':
+#         P = np.random.randn(N, n)
         
-    elif pert_type == 'random_uniform':
-        P = np.random.rand(N, n)
+#     elif pert_type == 'random_uniform':
+#         P = np.random.rand(N, n)
 
-    return P
+#     return P
 
-def generate_perturbation_matrix2(radius, sample_form, level, hat_dict, seed=None):
-    """
-    Generate a perturbation matrix either on the boundary or sampled from within a Frobenius ball.
+# def generate_perturbation_matrix2(radius, sample_form, level, hat_dict, seed=None):
+#     """
+#     Generate a perturbation matrix either on the boundary or sampled from within a Frobenius ball.
     
-    Args:
-        radius: Radius of the Frobenius ball
-        sample_form: Either 'sample' (from within ball) or 'boundary' (on boundary)
-        level: The level key to access in the dictionaries
-        hat_dict: Dictionary containing matrices for 'hat' case
-        worst_dict: Dictionary containing matrices for 'worst' case
-        seed: Optional random seed for reproducibility
+#     Args:
+#         radius: Radius of the Frobenius ball
+#         sample_form: Either 'sample' (from within ball) or 'boundary' (on boundary)
+#         level: The level key to access in the dictionaries
+#         hat_dict: Dictionary containing matrices for 'hat' case
+#         worst_dict: Dictionary containing matrices for 'worst' case
+#         seed: Optional random seed for reproducibility
     
-    Returns:
-        Perturbation matrix that can be added to a center matrix
-    """
-    if seed is not None:
-        np.random.seed(seed)
+#     Returns:
+#         Perturbation matrix that can be added to a center matrix
+#     """
+#     if seed is not None:
+#         np.random.seed(seed)
     
-    num_samples, num_vars = hat_dict[level].shape
+#     num_samples, num_vars = hat_dict[level].shape
 
-    # Generate random perturbation matrix
-    perturbation = np.random.randn(num_samples, num_vars)
+#     # Generate random perturbation matrix
+#     perturbation = np.random.randn(num_samples, num_vars)
     
-    # Calculate norms
-    squared_norm = np.linalg.norm(perturbation, 'fro')**2
-    max_squared_norm = num_samples * radius**2
+#     # Calculate norms
+#     squared_norm = np.linalg.norm(perturbation, 'fro')**2
+#     max_squared_norm = num_samples * radius**2
     
-    # Calculate scaling factor based on sample type
-    if sample_form == 'boundary':
-        # Scale exactly to the radius
-        scaling_factor = np.sqrt(max_squared_norm / squared_norm)
-    elif sample_form == 'sample':
-        # Scale to be within the radius
-        scaling_factor = np.sqrt(max_squared_norm / squared_norm) * np.random.rand(1)
+#     # Calculate scaling factor based on sample type
+#     if sample_form == 'boundary':
+#         # Scale exactly to the radius
+#         scaling_factor = np.sqrt(max_squared_norm / squared_norm)
+#     elif sample_form == 'sample':
+#         # Scale to be within the radius
+#         scaling_factor = np.sqrt(max_squared_norm / squared_norm) * np.random.rand(1)
     
-    return perturbation * scaling_factor
+#     return perturbation * scaling_factor
 
 def generate_perturbation_family(center_matrix, k, r_mu, r_sigma, coverage, seed=None):
     """
@@ -960,41 +960,41 @@ def generate_perturbation_matrix(radius, sample_form, level, hat_dict, coverage,
 
     return perturbation * scaling_factor
 
-def generate_perturbation_family2(center_matrix, k, r_mu=1.0, r_sigma=1.0, seed=None):
-    """
-    Generate k perturbation matrices from a base matrix using random shifts.
+# def generate_perturbation_family2(center_matrix, k, r_mu=1.0, r_sigma=1.0, seed=None):
+#     """
+#     Generate k perturbation matrices from a base matrix using random shifts.
     
-    Args:
-        center_matrix: Base matrix to perturb (n, m)
-        k: Number of perturbations to generate
-        r_mu: Max norm of mean shifts
-        r_sigma: Max Frobenius norm of covariance shifts
-        seed: Optional random seed
+#     Args:
+#         center_matrix: Base matrix to perturb (n, m)
+#         k: Number of perturbations to generate
+#         r_mu: Max norm of mean shifts
+#         r_sigma: Max Frobenius norm of covariance shifts
+#         seed: Optional random seed
         
-    Returns:
-        List of perturbation matrices
-    """
-    if seed is not None:
-        np.random.seed(seed)
+#     Returns:
+#         List of perturbation matrices
+#     """
+#     if seed is not None:
+#         np.random.seed(seed)
         
-    n, m = center_matrix.shape
-    perturbations = []
+#     n, m = center_matrix.shape
+#     perturbations = []
     
-    for _ in range(k):
-        # Generate random perturbation matrix
-        A = np.random.randn(n, m)
-        # Scale to have Frobenius norm = r_sigma
-        A = r_sigma * A / np.linalg.norm(A, ord='fro')
+#     for _ in range(k):
+#         # Generate random perturbation matrix
+#         A = np.random.randn(n, m)
+#         # Scale to have Frobenius norm = r_sigma
+#         A = r_sigma * A / np.linalg.norm(A, ord='fro')
         
-        # Add mean shift
-        delta_mu = np.random.randn(n, m)
-        delta_mu = r_mu * delta_mu / np.linalg.norm(delta_mu)
+#         # Add mean shift
+#         delta_mu = np.random.randn(n, m)
+#         delta_mu = r_mu * delta_mu / np.linalg.norm(delta_mu)
         
-        # Combine perturbations
-        perturbation = A + delta_mu
-        perturbations.append(perturbation)
+#         # Combine perturbations
+#         perturbation = A + delta_mu
+#         perturbations.append(perturbation)
         
-    return perturbations
+#     return perturbations
 
 def compute_abstraction_error(T, base, abst, metric):
     tau_base   = base @ T.T
