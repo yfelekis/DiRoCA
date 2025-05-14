@@ -2178,3 +2178,28 @@ def empirical_objective_no_max_batt(U_L, U_H, T, L_models, H_models, Ill, omega)
 
     loss = loss_iota / len(Ill)
     return loss
+
+def compute_empirical_radius(N, eta, c1=1.0, c2=1.0, alpha=2.0, m=3):
+    """
+    Compute epsilon_N(eta) for empirical Wasserstein case.
+
+    Parameters:
+    - N: int, number of samples
+    - eta: float, confidence level (0 < eta < 1)
+    - c1: float, constant from theorem (default 1.0, adjust if needed)
+    - c2: float, constant from theorem (default 1.0, adjust if needed)
+    - alpha: float, light-tail exponent (P[exp(||ξ||^α)] ≤ A)
+    - m: int, ambient dimension
+
+    Returns:
+    - epsilon: float, the concentration radius
+    """
+    assert 0 < eta < 1, "eta must be in (0,1)"
+    threshold = np.log(c1 / eta) / c2
+    if N >= threshold:
+        exponent = min(1/m, 0.5)
+    else:
+        exponent = 1 / alpha
+
+    epsilon = (np.log(c1 / eta) / (c2 * N)) ** exponent
+    return epsilon

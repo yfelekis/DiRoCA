@@ -34,23 +34,23 @@ def compute_worst_case_distance(params_worst):
     
     return G_squared
 
-# def condition_number(matrix):
-#     """
-#     Computes the condition number of a matrix using the 2-norm.
+def condition_number(matrix):
+    """
+    Computes the condition number of a matrix using the 2-norm.
 
-#     Parameters:
-#         matrix (np.ndarray): Input matrix (can be square or rectangular).
+    Parameters:
+        matrix (np.ndarray): Input matrix (can be square or rectangular).
 
-#     Returns:
-#         float: The condition number of the matrix.
-#     """
-#     # Compute the singular values of the matrix
-#     singular_values = np.linalg.svd(matrix, compute_uv=False)
+    Returns:
+        float: The condition number of the matrix.
+    """
+    # Compute the singular values of the matrix
+    singular_values = np.linalg.svd(matrix, compute_uv=False)
 
-#     # Condition number is the ratio of the largest to smallest singular value
-#     cond_number = singular_values.max() / singular_values.min()
+    # Condition number is the ratio of the largest to smallest singular value
+    cond_number = singular_values.max() / singular_values.min()
 
-#     return cond_number
+    return cond_number
 
 def contaminate_linear_relationships(data, contamination_fraction, contamination_type, k=1.345):
     """
@@ -1330,3 +1330,137 @@ def compute_empirical_radius(N, eta, c1=1.0, c2=1.0, alpha=2.0, m=3):
 
     epsilon = (np.log(c1 / eta) / (c2 * N)) ** exponent
     return epsilon
+
+def map_n_bin_old(T, df_base, df_abst):
+    """
+    Transform base samples and bin them to match abstract domain
+    
+    Args:
+        T: transformation matrix
+        df_base: base model data (already numpy array)
+        df_abst: abstract model data (already numpy array)
+    
+    Returns:
+        binned_samples: transformed and binned samples matching abstract domain
+    """
+    # Apply transformation
+    continuous_samples = T @ df_base.T  # This gives us continuous values
+    
+    # Get the unique values in abstract domain to understand our target bins
+    abst_unique_values = np.sort(np.unique(df_abst, axis=0), axis=0)
+    
+    # Create bins for each dimension
+    binned_samples = np.zeros_like(continuous_samples)
+    
+    for dim in range(continuous_samples.shape[0]):
+        # Get unique values for this dimension
+        unique_vals = np.unique(df_abst[:, dim])
+        n_bins = len(unique_vals)
+        
+        # Create bin edges using percentiles of the continuous data
+        bin_edges = np.percentile(continuous_samples[dim], 
+                                np.linspace(0, 100, n_bins + 1))
+        
+        # Ensure unique bin edges
+        bin_edges = np.unique(bin_edges)
+        if len(bin_edges) < n_bins + 1:
+            # If we don't have enough unique edges, create artificial ones
+            bin_edges = np.linspace(continuous_samples[dim].min(),
+                                  continuous_samples[dim].max(),
+                                  n_bins + 1)
+        
+        # Digitize the continuous values into bins
+        bin_indices = np.digitize(continuous_samples[dim], bin_edges[1:-1])
+        
+        # Map bin indices to abstract domain values
+        binned_samples[dim] = unique_vals[bin_indices]
+    
+    return binned_samples.T
+
+
+def map_n_bin(T, df_base, df_abst):
+    """
+    Transform base samples and bin them using fixed bin edges from df_abst.
+    
+    Args:
+        T: transformation matrix
+        df_base: base model data (numpy array)
+        df_abst: abstract model data (numpy array)
+    
+    Returns:
+        binned_samples: transformed and binned samples matching abstract domain
+    """
+    # Apply transformation
+    continuous_samples = T @ df_base.T  # (d, N)
+
+    # Precompute fixed bin edges from df_abst
+    abst_unique = np.sort(np.unique(df_abst, axis=0), axis=0)
+
+    # We assume:
+    # - Dimension 0: CG (control gap) -> use discrete values (no binning needed, handled separately)
+    # - Dimension 1: ML (mass loading) -> use percentile bins from df_abst
+
+    binned_samples = np.zeros_like(continuous_samples)
+
+    # Dimension 0: CG
+    unique_cg = np.unique(df_abst[:, 0])
+    n_bins_cg = len(unique_cg)
+    
+    # Manual mapping for CG later after transformation
+    # So no binning for CG here!
+
+    # Dimension 1: ML
+    unique_ml = np.unique(df_abst[:, 1])
+    n_bins_ml = len(unique_ml)
+    
+    # Create bin edges for ML using df_abst
+    ml_values = df_abst[:, 1]
+    bin_edges_ml = np.percentile(ml_values, np.linspace(0, 100, n_bins_ml + 1))
+    bin_edges_ml = np.unique(bin_edges_ml)
+    if len(bin_edges_ml) < n_bins_ml + 1:
+        bin_edges_ml = np.linspace(ml_values.min(), ml_values.max(), n_bins_ml + 1)
+
+    # Now bin the samples
+    # (0) CG: leave as continuous now, mapping will happen separately
+    binned_samples[0] = continuous_samples[0]  # keep CG for now (later mapped)
+
+    # (1) ML: use fixed bin edges
+    bin_indices_ml = np.digitize(continuous_samples[1], bin_edges_ml[1:-1])
+    binned_samples[1] = unique_ml[bin_indices_ml]
+
+    return binned_samples.T
+
+def mod_noise(U_samples, intervention):
+    """
+    Modify exogenous noise for exact interventions by setting the entire column 
+    to the intervention value for each intervened variable.
+    
+    Args:
+        U_samples: Original noise samples (n_samples x n_variables)
+        intervention: Intervention object or None
+    """
+    U_modified = U_samples.copy()
+    
+    if intervention is not None:
+        # Get dictionary of interventions
+        intervention_dict = intervention.vv()
+        
+        # For each intervened variable
+        for var in intervention.Phi():  # Use Phi() to get variables
+            value = intervention_dict[var]
+            
+            # If var is already an integer index, use it directly
+            if isinstance(var, (int, np.integer)):
+                var_idx = var
+            # Otherwise try to get the name or string representation
+            else:
+                var_idx = str(var)
+                # Map variable name to index based on your convention
+                # For example, if 'CG' maps to 0, 'ML1' to 1, etc.
+                var_map = {'CG': 0, 'ML1': 1, 'ML2': 2, 'S': 0, 'T': 1}
+                var_idx = var_map.get(var_idx, 0)  # default to 0 if not found
+            
+            # Set entire column to intervention value
+            U_modified[:, var_idx] = value
+    
+    return U_modified
