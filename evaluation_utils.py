@@ -6,7 +6,7 @@ from sklearn.mixture import GaussianMixture
 from scipy.linalg import sqrtm
 import seaborn as sns
 import modularised_utils as mut
-import opt_utils as oput
+import opt_tools as oput
 import operations as ops
 import joblib
 
@@ -867,7 +867,6 @@ def generate_perturbation_family(center_matrix, k, r_mu, r_sigma, coverage, seed
     
     for i in range(k):
         if coverage == 'rand':
-            # Original random perturbation logic
             # Covariance perturbation
             A = np.random.randn(n, m)
             A = r_sigma * A / np.linalg.norm(A, ord='fro')

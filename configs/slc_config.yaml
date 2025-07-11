@@ -1,0 +1,52 @@
+model_type: 'linear_anm'
+
+experiment_name: 'SLC'
+# Number of samples to generate for each model
+num_llsamples: 10000
+num_hlsamples: 10000
+
+# Low-Level (LL) Model Definition
+low_level_model:
+  variables: ['Smoking', 'Tar', 'Cancer']
+  coefficients:
+    # Format: [[parent, child], weight]
+    - [['Smoking', 'Tar'], 0.3]
+    - [['Tar', 'Cancer'], 0.2]
+  noise_params:
+    mu: [0, 0, 0]
+    sigma_diag: [1, 1, 1]
+
+# High-Level (HL) Model Definition
+high_level_model:
+  variables: ['Smoking_', 'Cancer_']
+  # Coefficients are learned from data, so we only define the initial graph structure
+  initial_coefficients:
+    - [['Smoking_', 'Cancer_'], 0.0]
+
+# Abstraction Definition
+abstraction:
+  # The T matrix for mapping LL -> HL
+  T_matrix:
+    - [1, 2, 1]
+    - [0, 1, 0]
+  # Definitions for interventions (use 'None' for the observational case)
+  interventions:
+    # Low-level intervention names and their definitions
+    iota0: 'None'
+    iota1: {'Smoking': 0}
+    iota2: {'Smoking': 0, 'Tar': 1}
+    iota3: {'Smoking': 1}
+    iota4: {'Smoking': 1, 'Tar': 0}
+    iota5: {'Smoking': 1, 'T': 1}
+    # High-level intervention names and their definitions
+    eta0: 'None'
+    eta1: {'Smoking_': 0}
+    eta2: {'Smoking_': 1}
+  # The omega map, mapping LL intervention names to HL intervention names
+  omega_map:
+    iota0: 'eta0'
+    iota1: 'eta1'
+    iota2: 'eta1'
+    iota3: 'eta2'
+    iota4: 'eta2'
+    iota5: 'eta2'
