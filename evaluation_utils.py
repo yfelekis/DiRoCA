@@ -1221,26 +1221,6 @@ def evaluate_abstraction(df_base, df_abst, T, tau_threshold=1e-2):
     
     return metrics
 
-# def run_abs_lingam_complete(df_base, df_abst):
-#     """
-#     Run complete Abs-LiNGAM algorithm with different abstraction styles.
-#     """
-#     styles = ["Perfect", "Noisy"]
-#     results = {}
-    
-#     for style in styles:
-#         # print(f"\nTesting {style} abstraction:")
-#         T, error = abs_lingam_reconstruction(df_base, df_abst, style=style)
-#         metrics = evaluate_abstraction(df_base, df_abst, T)
-        
-#         results[style] = {
-#             'T': T,
-#             'error': error,
-#             'metrics': metrics
-#         }
-    
-#     return results
-
 def abs_lingam_reconstruction_v2(df_base, df_abst, n_paired_samples=None, style="Perfect", tau_threshold=1e-2):
     """
     Modified version to better match the paper's approach.
@@ -1280,7 +1260,6 @@ def abs_lingam_reconstruction_v2(df_base, df_abst, n_paired_samples=None, style=
     
     return T, error
 
-# Usage example:
 def run_abs_lingam_complete(df_base, df_abst, n_paired_samples=1000):
     """
     Run complete Abs-LiNGAM algorithm with different abstraction styles.

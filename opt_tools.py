@@ -319,10 +319,12 @@ def print_results(T, paramsL, paramsH, elapsed_time):
 
     print(f"\nOptimization time: {elapsed_time:.4f} seconds")
 
-def project_onto_gelbrich_ball(mu, Sigma, hat_mu, hat_Sigma, epsilon, max_iter=100, tol=1e-4):
+def project_onto_gelbrich_ball(mu_in, Sigma_in, hat_mu, hat_Sigma, epsilon, max_iter=100, tol=1e-4):
     """
     Project (mu, Sigma) onto the Gelbrich ball
     """
+    mu = mu_in.clone().detach()
+    Sigma = Sigma_in.clone().detach()
     for i in range(max_iter):
         mu_dist_sq     = torch.sum((mu - hat_mu)**2)
         Sigma_sqrt     = sqrtm_svd(Sigma)
@@ -347,7 +349,7 @@ def project_onto_gelbrich_ball(mu, Sigma, hat_mu, hat_Sigma, epsilon, max_iter=1
     #print(f"difference: {final_G_squared.item() - epsilon**2}")
     if final_G_squared > epsilon**2 + tol:
         print(f"Warning: Final G_squared = {final_G_squared.item()} > {epsilon**2}")
-    
+
     return mu, Sigma
 
 # Convert inputs to torch tensors and float32 if needed
@@ -1109,6 +1111,7 @@ def optimize_max_proxgrad(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, o
     Sigma_L = Sigma_L.clone().detach().requires_grad_(True)
     Sigma_H = Sigma_H.clone().detach().requires_grad_(True)
 
+
     max_converged = False
     
     if delta == 0:
@@ -1120,6 +1123,7 @@ def optimize_max_proxgrad(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, o
     else:
         optimizer_mu    = torch.optim.Adam([mu_L, mu_H], lr=eta)
         optimizer_sigma = torch.optim.Adam([Sigma_L, Sigma_H], lr=eta)
+
     
     for _ in range(num_steps_max):
         optimizer_mu.zero_grad()
@@ -1149,7 +1153,7 @@ def optimize_max_proxgrad(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, o
         Sigma_H_half = Sigma_H.detach().clone()
         
         optimizer_sigma.step()
-        
+
         with torch.no_grad():
             Sigma_L_new = prox_grad_Sigma_L(cur_T, Sigma_L_half, LLmodels, Sigma_H_half, HLmodels, omega, lambda_param_L)
             Sigma_H_new = prox_grad_Sigma_H(cur_T, Sigma_H_half, LLmodels, Sigma_L_new, HLmodels, omega, lambda_param_H)
@@ -1333,6 +1337,7 @@ def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilo
     joblib.dump(opt_params, f"data/{experiment}/{method}/opt_params.pkl")
 
     return opt_params, T
+
 def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmodels, omega,
                            lambda_L, lambda_H, lambda_param_L, lambda_param_H,
                            xavier, project_onto_gelbrich, eta_min, eta_max, max_iter,
@@ -1417,6 +1422,13 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
                 lambda_L, lambda_H, lambda_param_L, lambda_param_H,
                 eta_max, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, monitor)
 
+            # --- NEW DEBUGGING CHECK ---
+            # Check if the Sigma matrix from the max step is valid before projecting
+            eigenvalues = np.linalg.eigvalsh(Sigma_L.detach().cpu().numpy())
+            if np.any(eigenvalues < 0):
+                print(f"WARNING: Epoch {epoch}, Sigma_L is NOT positive semi-definite! Smallest eigenvalue: {eigenvalues.min():.4f}")
+            # --- END OF CHECK ---
+
             if project_onto_gelbrich:
                 mu_L, Sigma_L = project_onto_gelbrich_ball(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
                 mu_H, Sigma_H = project_onto_gelbrich_ball(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
@@ -1431,12 +1443,20 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
         condition_num = evut.condition_number(T_new.detach().numpy())
         delta_T_norm = torch.norm(T_new - T_prev).item()
         
+        # monitor.track_epoch_metrics(
+        #     delta_obj=delta_objective,
+        #     cond_num=condition_num,
+        #     delta_T=delta_T_norm
+        # )
         monitor.track_epoch_metrics(
-            delta_obj=delta_objective,
-            cond_num=condition_num,
-            delta_T=delta_T_norm
-        )
-        # --- END OF MODIFICATION ---
+                delta_obj=delta_objective,
+                cond_num=condition_num,
+                delta_T=delta_T_norm,
+                mu_L=mu_L,          # <-- ADD THIS
+                sigma_L=Sigma_L,   # <-- ADD THIS
+                mu_H=mu_H,          # <-- ADD THIS
+                sigma_H=Sigma_H    # <-- ADD THIS
+            )
 
         # Use the calculated delta_objective for the convergence criterion
         if delta_objective < tol:
@@ -1446,7 +1466,7 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
         T = T_new
         previous_objective = objective_T.item()
 
-        print(f"Epoch {epoch}: Objective = {objective_T.item():.4f}, Cond. Num = {condition_num:.2f}")
+        #print(f"Epoch {epoch}: Objective = {objective_T.item():.4f}, Cond. Num = {condition_num:.2f}")
     # If enabled, plot the final summary dashboard
     if plot_epochs:
         print("\n--- Generating final run summary plot ---")
@@ -1480,143 +1500,8 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
         elapsed_time = end_time - start_time
         print_results(T_final, paramsL, paramsH, elapsed_time)
         
-    return {'L': paramsL, 'H': paramsH}, T_final
+    return {'L': paramsL, 'H': paramsH}, T_final, monitor
 
-# def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmodels, omega,
-#                            lambda_L, lambda_H, lambda_param_L, lambda_param_H,
-#                            xavier, project_onto_gelbrich, eta_min, eta_max, max_iter,
-#                            num_steps_min, num_steps_max, proximal_grad, tol, seed,
-#                            robust_L, robust_H, grad_clip, plot_steps, plot_epochs,
-#                            display_results, experiment):
-
-#     torch.manual_seed(seed)
-#     start_time = time.time()
-
-#     epsilon = theta_hatL['radius'] if robust_L else 0
-#     delta = theta_hatH['radius'] if robust_H else 0
-
-#     method = 'erica' if robust_L or robust_H else 'enrico'
-#     num_steps_min = 1 if method == 'enrico' else num_steps_min
-#     max_grad_norm = 1.0 if grad_clip else float('inf')
-
-#     if xavier and not project_onto_gelbrich:
-#         print("Forcing projection onto Gelbrich ball!")
-#         project_onto_gelbrich = True
-
-#     max_converged = False
-
-#     mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H = get_initialization(
-#         theta_hatL, theta_hatH, epsilon, delta, initial_theta)
-
-#     T = torch.randn(mu_H.shape[0], mu_L.shape[0], requires_grad=True)
-#     optimizer_T = torch.optim.Adam([T], lr=eta_min, eps=1e-8, amsgrad=True)
-
-#     previous_objective = float('inf')
-    
-#     # Instantiate the monitor at the start of the run
-#     monitor = TrainingMonitor()
-
-#     for epoch in tqdm(range(max_iter)):
-#         # Tell the monitor a new epoch is starting
-#         monitor.start_epoch()
-
-#         T_prev = T.detach().clone()
-#         mu_L_prev, Sigma_L_prev = mu_L.detach().clone(), Sigma_L.detach().clone()
-#         mu_H_prev, Sigma_H_prev = mu_H.detach().clone(), Sigma_H.detach().clone()
-
-#         # Pass the monitor to the optimization sub-routine
-#         T_new, objective_T, hit_nan = optimize_min(
-#             T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
-#             lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
-#             epsilon, delta, num_steps_min, optimizer_T, max_grad_norm, seed,
-#             project_onto_gelbrich, xavier, monitor)
-
-#         if hit_nan:
-#             print("NaN encountered during optimization. Returning last valid state.")
-
-#             paramsL = {
-#                 'mu_U': mu_L_prev.detach().numpy(),
-#                 'Sigma_U': Sigma_L_prev.detach().numpy(),
-#                 'g_squared': epsilon,
-#                 'mu_hat': theta_hatL['mu_U'],
-#                 'Sigma_hat': theta_hatL['Sigma_U'],
-#                 'radius': epsilon
-#             }
-
-#             paramsH = {
-#                 'mu_U': mu_H_prev.detach().numpy(),
-#                 'Sigma_U': Sigma_H_prev.detach().numpy(),
-#                 'g_squared': delta,
-#                 'mu_hat': theta_hatH['mu_U'],
-#                 'Sigma_hat': theta_hatH['Sigma_U'],
-#                 'radius': delta
-#             }
-
-#             if method == 'erica':
-#                 paramsL['g_squared'] = np.sqrt(evut.compute_worst_case_distance(paramsL))
-#                 paramsH['g_squared'] = np.sqrt(evut.compute_worst_case_distance(paramsH))
-
-#             return {'L': paramsL, 'H': paramsH}, T_prev.numpy()
-
-#         if method == 'erica' and not max_converged:
-#             # Simplified to only use proxgrad and pass the monitor
-#             mu_L, Sigma_L, mu_H, Sigma_H, obj_theta, max_converged = optimize_max_proxgrad(
-#                 T_new, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
-#                 hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
-#                 lambda_L, lambda_H, lambda_param_L, lambda_param_H,
-#                 eta_max, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, monitor)
-
-#             if project_onto_gelbrich:
-#                 mu_L, Sigma_L = project_onto_gelbrich_ball(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
-#                 mu_H, Sigma_H = project_onto_gelbrich_ball(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
-        
-#         # Tell the monitor the epoch has ended
-#         monitor.end_epoch()
-        
-#         # If plotting is enabled, plot the progress for this epoch
-#         if plot_steps:
-#             monitor.plot_epoch_progress(epoch)
-        
-#         criterion = abs(previous_objective - objective_T.item())
-#         if criterion < tol:
-#             print(f"Convergence reached at epoch {epoch+1} with objective {objective_T.item()}")
-#             break
-
-#         T = T_new
-#         previous_objective = objective_T.item()
-
-#     paramsL = {
-#         'mu_U': mu_L.detach().numpy(),
-#         'Sigma_U': Sigma_L.detach().numpy(),
-#         'g_squared': epsilon,
-#         'mu_hat': theta_hatL['mu_U'],
-#         'Sigma_hat': theta_hatL['Sigma_U'],
-#         'radius': epsilon
-#     }
-
-#     paramsH = {
-#         'mu_U': mu_H.detach().numpy(),
-#         'Sigma_U': Sigma_H.detach().numpy(),
-#         'g_squared': delta,
-#         'mu_hat': theta_hatH['mu_U'],
-#         'Sigma_hat': theta_hatH['Sigma_U'],
-#         'radius': delta
-#     }
-    
-#     if method == 'erica':
-#         paramsL['g_squared'] = np.sqrt(evut.compute_worst_case_distance(paramsL))
-#         paramsH['g_squared'] = np.sqrt(evut.compute_worst_case_distance(paramsH))
-
-#     T = T.detach().numpy()
-#     end_time = time.time()
-#     if plot_epochs:
-#         print("\n--- Generating final run summary plot ---")
-#         monitor.plot_run_summary()
-#     if display_results:
-#         elapsed_time = end_time - start_time
-#         print_results(T, paramsL, paramsH, elapsed_time)
-
-#     return {'L': paramsL, 'H': paramsH}, T
 
 import torch
 import numpy as np
@@ -1639,7 +1524,96 @@ class TrainingMonitor:
         self.delta_objectives = []
         self.condition_numbers = []
         self.delta_T_norms = []
+        self.mu_L_history = []
+        self.sigma_L_history = []
+        self.mu_H_history = []
+        self.sigma_H_history = []
 
+    def compute_trajectory_length(self, level='L', lambda_reg=1.0):
+        """Calculates the total path length of the optimization in parameter space."""
+        mu_hist = self.mu_L_history if level == 'L' else self.mu_H_history
+        sigma_hist = self.sigma_L_history if level == 'L' else self.sigma_H_history
+        
+        total_dist = 0.0
+        for i in range(len(mu_hist) - 1):
+            mu_dist = np.linalg.norm(mu_hist[i+1] - mu_hist[i])
+            sigma_dist = np.linalg.norm(sigma_hist[i+1] - sigma_hist[i], 'fro')
+            total_dist += mu_dist + lambda_reg * sigma_dist
+        return total_dist
+
+    def compute_spread_metrics(self, level='L'):
+        """Calculates the spread of the visited distributions."""
+        mu_hist = np.array(self.mu_L_history if level == 'L' else self.mu_H_history)
+        sigma_hist = np.array(self.sigma_L_history if level == 'L' else self.sigma_H_history)
+        
+        # Spread of the mean vectors
+        spread_mu = np.trace(np.cov(mu_hist, rowvar=False))
+        
+        # Spread of the covariance matrices
+        sigma_bar = np.mean(sigma_hist, axis=0)
+        spread_sigma = np.mean([np.linalg.norm(s - sigma_bar, 'fro')**2 for s in sigma_hist])
+        
+        return {'spread_mu': spread_mu, 'spread_sigma': spread_sigma}
+
+    def compute_effective_rank_history(self, level='L'):
+        """Calculates the effective rank for each covariance matrix in the trajectory."""
+        sigma_hist = self.sigma_L_history if level == 'L' else self.sigma_H_history
+        eff_ranks = []
+        for sigma in sigma_hist:
+            # Get real-valued eigenvalues for the symmetric matrix
+            eigvals = np.linalg.eigvalsh(sigma)
+            eigvals = np.maximum(eigvals, 1e-9) # Prevent issues with zero eigenvalues
+            
+            # Normalize eigenvalues to form a probability distribution
+            normalized_eigvals = eigvals / np.sum(eigvals)
+            
+            # Calculate Shannon entropy of the spectrum
+            entropy = -np.sum(normalized_eigvals * np.log(normalized_eigvals))
+            eff_ranks.append(np.exp(entropy))
+            
+        return eff_ranks
+
+    def _w2_sq_dist(self, mu1, sigma1, mu2, sigma2):
+        """
+        Helper to compute squared Wasserstein-2 distance using an SVD-based matrix sqrt
+        to be consistent with the optimization's projection function.
+        """
+        # Helper function to compute sqrt via SVD, mimicking your 'sqrtm_svd_np'
+        def _sqrtm_svd_internal(A):
+            A = 0.5 * (A + A.T) # Symmetrize
+            eps = 1e-10
+            A = A + eps * np.eye(A.shape[0]) # Regularize
+            U, S, Vh = np.linalg.svd(A)
+            S_sqrt = np.sqrt(np.maximum(S, eps)) # Ensure non-negative before sqrt
+            return U @ np.diag(S_sqrt) @ Vh
+
+        mu_dist_sq = np.sum((mu1 - mu2)**2)
+        
+        sigma1_sqrt = _sqrtm_svd_internal(sigma1)
+        sigma2_sqrt = _sqrtm_svd_internal(sigma2)
+        
+        sigma_dist_sq = np.sum((sigma1_sqrt - sigma2_sqrt)**2)
+        
+        return mu_dist_sq + sigma_dist_sq
+
+
+    def compute_utilization_history(self, initial_params, level='L'):
+        """Calculates how close the optimizer gets to the edge of the ball."""
+        if level == 'L':
+            mu_hist, sigma_hist = self.mu_L_history, self.sigma_L_history
+            mu_hat, sigma_hat, radius = initial_params['mu_U'], initial_params['Sigma_U'], initial_params['radius']
+        else:
+            mu_hist, sigma_hist = self.mu_H_history, self.sigma_H_history
+            mu_hat, sigma_hat, radius = initial_params['mu_U'], initial_params['Sigma_U'], initial_params['radius']
+
+        utilization = []
+        if radius == 0: return [0.0] * len(mu_hist) # Avoid division by zero
+        
+        for mu_t, sigma_t in zip(mu_hist, sigma_hist):
+            w2_dist = np.sqrt(self._w2_sq_dist(mu_t, sigma_t, mu_hat, sigma_hat))
+            utilization.append(w2_dist / radius)
+        return utilization
+    
     def start_epoch(self):
         """Resets the step history for a new epoch."""
         self.current_epoch_data = {
@@ -1722,10 +1696,14 @@ class TrainingMonitor:
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         plt.show()
     # --- NEW: Method to track all end-of-epoch metrics at once ---
-    def track_epoch_metrics(self, delta_obj, cond_num, delta_T):
+    def track_epoch_metrics(self, delta_obj, cond_num, delta_T, mu_L, sigma_L, mu_H, sigma_H):
         self.delta_objectives.append(delta_obj)
         self.condition_numbers.append(cond_num)
         self.delta_T_norms.append(delta_T)
+        self.mu_L_history.append(mu_L.detach().cpu().numpy())
+        self.sigma_L_history.append(sigma_L.detach().cpu().numpy())
+        self.mu_H_history.append(mu_H.detach().cpu().numpy())
+        self.sigma_H_history.append(sigma_H.detach().cpu().numpy())
 
 
 
@@ -1804,3 +1782,208 @@ def compute_empirical_radius(N, eta, c1=1.0, c2=1.0, alpha=2.0, m=3):
 
     epsilon = (np.log(c1 / eta) / (c2 * N)) ** exponent
     return epsilon
+
+
+import numpy as np
+from sklearn.metrics import precision_score, recall_score, roc_auc_score, f1_score, confusion_matrix
+
+def perfect_abstraction(px_samples, py_samples, tau_threshold=1e-2):
+    """
+    Fits an abstraction function assumed to be perfect.
+    
+    Args:
+        px_samples: concrete/base samples (your df_base)
+        py_samples: abstract samples (your df_abst)
+        tau_threshold: threshold for filtering small values
+    """
+    tau_adj = np.linalg.pinv(px_samples) @ py_samples
+    tau_adj_mask = np.abs(tau_adj) > tau_threshold
+    tau_adj = tau_adj * tau_adj_mask
+    return tau_adj
+
+def noisy_abstraction(px_samples, py_samples, tau_threshold=1e-1, refit_coeff=False):
+    """
+    Fits an abstraction function assumed to be noisy.
+    """
+    # Reconstruct T
+    tau_adj_hat = np.linalg.pinv(px_samples) @ py_samples
+    
+    # Max entries
+    tau_mask_hat = np.argmax(np.abs(tau_adj_hat), axis=1)
+    # To one hot
+    abs_nodes = py_samples.shape[1]
+    tau_mask_hat = np.eye(abs_nodes)[tau_mask_hat]
+    # Filter out small values
+    tau_mask_hat *= np.array(np.abs(tau_adj_hat) > tau_threshold, dtype=np.int32)
+    
+    # Eventually refit coefficients
+    if refit_coeff:
+        for y in range(tau_mask_hat.shape[1]):
+            block = np.where(tau_mask_hat[:, y] == 1)[0]
+            if len(block) > 0:
+                tau_adj_hat[block, y] = np.linalg.pinv(px_samples[:, block]) @ py_samples[:, y]
+    
+    # Compute final abstraction
+    tau_adj_hat = tau_mask_hat * tau_adj_hat
+    return tau_adj_hat
+
+def abs_lingam_reconstruction(df_base, df_abst, style="Perfect", tau_threshold=1e-2):
+    """
+    Implement Abs-LiNGAM's T-reconstruction following the paper's implementation.
+    
+    Args:
+        df_base: numpy array of concrete observations
+        df_abst: numpy array of abstract observations
+        style: "Perfect" or "Noisy"
+        tau_threshold: threshold for filtering small values
+    """
+    # Verify shapes
+    n_samples_base, d = df_base.shape
+    n_samples_abst, b = df_abst.shape
+    
+    assert n_samples_base == n_samples_abst, \
+        f"Number of samples must match: {n_samples_base} != {n_samples_abst}"
+    
+    # Fit abstraction function based on style
+    if style == "Perfect":
+        T = perfect_abstraction(df_base, df_abst, tau_threshold)
+    elif style == "Noisy":
+        T = noisy_abstraction(df_base, df_abst, tau_threshold, False)
+    else:
+        raise ValueError(f"Unknown style {style}")
+    
+    # Compute reconstruction error
+    error = np.sum((df_base @ T - df_abst) ** 2)
+    
+    return T, error
+
+def evaluate_abstraction(df_base, df_abst, T, tau_threshold=1e-2):
+    """
+    Evaluate the abstraction quality using metrics from the paper.
+    """
+    # Predictions
+    predictions = df_base @ T
+    
+    # Create binary masks for evaluation
+    T_mask = np.abs(T) > tau_threshold
+    T_pred = np.abs(T) > tau_threshold
+    
+    # Basic metrics
+    mse = np.mean((df_abst - predictions) ** 2)
+    r2 = 1 - np.sum((df_abst - predictions) ** 2) / np.sum((df_abst - np.mean(df_abst, axis=0)) ** 2)
+    
+    # Structure metrics (from paper)
+    def false_positive_rate(y_true, y_pred):
+        cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
+        if cm.shape == (2, 2):
+            tn, fp, fn, tp = cm.ravel()
+            return fp / (fp + tn) if (fp + tn) > 0 else 0
+        return 0.0
+    
+    # Flatten for binary metrics
+    T_flat = T_mask.flatten()
+    T_pred_flat = T_pred.flatten()
+    
+    # Handle cases where all predictions are the same class
+    try:
+        prec = precision_score(T_flat, T_pred_flat)
+    except:
+        prec = 1.0 if np.array_equal(T_flat, T_pred_flat) else 0.0
+        
+    try:
+        rec = recall_score(T_flat, T_pred_flat)
+    except:
+        rec = 1.0 if np.array_equal(T_flat, T_pred_flat) else 0.0
+        
+    try:
+        f1 = f1_score(T_flat, T_pred_flat)
+    except:
+        f1 = 1.0 if np.array_equal(T_flat, T_pred_flat) else 0.0
+    
+    # Skip ROC AUC if we have only one class
+    unique_classes = np.unique(T_flat)
+    if len(unique_classes) == 2:
+        try:
+            roc_auc = roc_auc_score(T_flat, np.abs(T).flatten())
+        except:
+            roc_auc = np.nan
+    else:
+        roc_auc = np.nan
+    
+    metrics = {
+        'mse': mse,
+        'r2': r2,
+        'precision': prec,
+        'recall': rec,
+        'f1': f1,
+        'roc_auc': roc_auc,
+        'fpr': false_positive_rate(T_flat, T_pred_flat)
+    }
+    
+    # Add sparsity metric
+    metrics['sparsity'] = 1.0 - (np.sum(T_mask) / T_mask.size)
+    
+    return metrics
+
+def abs_lingam_reconstruction_v2(df_base, df_abst, n_paired_samples=None, style="Perfect", tau_threshold=1e-2):
+    """
+    Modified version to better match the paper's approach.
+    
+    Args:
+        df_base: numpy array of concrete observations (D_L)
+        df_abst: numpy array of abstract observations
+        n_paired_samples: number of samples to use for joint dataset (D_J)
+        style: "Perfect" or "Noisy"
+        tau_threshold: threshold for filtering small values
+    """
+    # Get dimensions
+    n_samples_base, d = df_base.shape
+    n_samples_abst, b = df_abst.shape
+    
+    # Create joint dataset D_J by taking a subset of paired samples
+    if n_paired_samples is None:
+        n_paired_samples = min(n_samples_base, n_samples_abst)
+    
+    # Ensure n_paired_samples is smaller than both datasets
+    n_paired_samples = min(n_paired_samples, n_samples_base, n_samples_abst)
+    
+    # Create D_J using the first n_paired_samples
+    D_J_base = df_base[:n_paired_samples]
+    D_J_abst = df_abst[:n_paired_samples]
+    
+    # Fit abstraction function based on style using only paired data
+    if style == "Perfect":
+        T = perfect_abstraction(D_J_base, D_J_abst, tau_threshold)
+    elif style == "Noisy":
+        T = noisy_abstraction(D_J_base, D_J_abst, tau_threshold, False)
+    else:
+        raise ValueError(f"Unknown style {style}")
+    
+    # Compute reconstruction error using all available data
+    error = np.sum((df_base @ T - df_abst) ** 2)
+    
+    return T, error
+
+def run_abs_lingam_complete(df_base, df_abst, n_paired_samples=1000):
+    """
+    Run complete Abs-LiNGAM algorithm with different abstraction styles.
+    """
+    styles = ["Perfect", "Noisy"]
+    results = {}
+    
+    for style in styles:
+        T, error = abs_lingam_reconstruction_v2(
+            df_base, 
+            df_abst,
+            n_paired_samples=n_paired_samples,
+            style=style
+        )
+        metrics = evaluate_abstraction(df_base, df_abst, T)
+        
+        results[style] = {
+            'T': T,
+            'error': error,
+            'metrics': metrics
+        }
+    
+    return results

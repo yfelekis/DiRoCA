@@ -25,7 +25,7 @@ def generate_and_save(config):
     print(f"--- Generating data for {model_type} model: {experiment} ---")
     
     # These will be populated by the specific model branch
-    Dll_samples = {}
+    Dll_samples, Dll_noise = {}, {}
     ll_causal_graph = None
 
     # Get shared noise parameters
@@ -49,8 +49,10 @@ def generate_and_save(config):
         for iota in Ill_relevant:
             llcm = LinearAddSCM(ll_causal_graph, ll_endogenous_coeff_dict, iota)
             noise = np.random.multivariate_normal(mean=ll_mu_hat, cov=ll_Sigma_hat, size=num_llsamples)
-            Dll_samples[iota] = llcm.simulate(noise)
+            Dll_noise[iota] = noise
+            Dll_samples[iota] = llcm.simulate(Dll_noise[iota])
         print("✓ Linear low-level sampling complete.")
+
 
     # BRANCH for Non-Linear Models (NEW)
     elif model_type == 'continuous_nonlinear_anm':
@@ -74,7 +76,8 @@ def generate_and_save(config):
             # Use the new NonlinearAddSCM class
             llcm = NonlinearAddSCM(ll_causal_graph, functions, iota)
             noise = np.random.multivariate_normal(mean=ll_mu_hat, cov=ll_Sigma_hat, size=num_llsamples)
-            Dll_samples[iota] = llcm.simulate(noise)
+            Dll_noise[iota] = noise
+            Dll_samples[iota] = llcm.simulate(Dll_noise[iota])
         print("✓ Non-linear low-level sampling complete.")
     
     else:
@@ -89,6 +92,7 @@ def generate_and_save(config):
     def create_intervention(spec):
         if spec is None or spec == 'None': return None
         return Intervention(spec)
+    
     interventions = {name: create_intervention(spec) for name, spec in abs_config.get('interventions', {}).items()}
     omega = {interventions[ll_name]: interventions[hl_name] for ll_name, hl_name in abs_config.get('omega_map', {}).items()}
     Ill_relevant = list(set(omega.keys()))
@@ -123,14 +127,16 @@ def generate_and_save(config):
         HLmodels = {eta: LinearAddSCM(hl_causal_graph, hl_endogenous_coeff_dict, eta) for eta in Ihl_relevant}
 
     LLmodel = {'graph': ll_causal_graph, 'intervention_set': Ill_relevant,
-               'noise_dist': {'mu': ll_mu_hat, 'sigma': ll_Sigma_hat}, 'data': Dll_samples, 'scm_instances': LLmodels}
+               'noise_dist': {'mu': ll_mu_hat, 'sigma': ll_Sigma_hat}, 'data': Dll_samples,
+               'scm_instances': LLmodels, 'noise': Dll_noise}
     if model_type == 'linear_anm':
         LLmodel['coeffs'] = {tuple(item[0]): item[1] for item in ll_config['coefficients']}
     elif model_type == 'continuous_nonlinear_anm':
         LLmodel['functions'] = ll_config['structural_functions']
 
     HLmodel = {'graph': hl_causal_graph, 'intervention_set': Ihl_relevant, 'coeffs': hl_endogenous_coeff_dict,
-               'noise_dist': {'mu': hl_mu_hat, 'sigma': hl_Sigma_hat}, 'data': Dhl_samples, 'scm_instances': HLmodels}
+               'noise_dist': {'mu': hl_mu_hat, 'sigma': hl_Sigma_hat}, 'data': Dhl_samples,
+               'scm_instances': HLmodels, 'noise': Dhl_noise}
     abstraction_data = {'T': T, 'omega': omega}
     
     path = f"data/{experiment}"

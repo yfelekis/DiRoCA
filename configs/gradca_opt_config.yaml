@@ -18,7 +18,7 @@ k_folds: 2
 # --- ADD/UPDATE THESE PARAMETERS ---
 seed: 42             # For all random operations, including KFold
 plot_steps: false
-plot_epochs: true
+plot_epochs: false
 display_results: false
 # --- END OF ADDED PARAMETERS ---
 
@@ -27,5 +27,5 @@ xavier: false
 project_onto_gelbrich: false
 proximal_grad: true
 grad_clip: true
-robust_L: true
-robust_H: true
+robust_L: false
+robust_H: false

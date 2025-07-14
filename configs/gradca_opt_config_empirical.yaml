@@ -1,0 +1,22 @@
+# Epsilon and Delta are required, so we set them to 0 for the non-robust case
+epsilon: 0.0
+delta: 0.0
+
+# Optimization parameters
+eta_max: 0.001
+eta_min: 0.001
+max_iter: 20
+num_steps_min: 5
+num_steps_max: 2
+tol: 0.0001
+
+# K-Fold Cross-Validation settings
+k_folds: 2
+
+# Seed and initialization
+seed: 23
+initialization: 'random'
+
+# Method flags - This disables the robust part of the optimization
+robust_L: false 
+robust_H: false
