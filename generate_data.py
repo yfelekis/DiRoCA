@@ -12,6 +12,7 @@ def generate_and_save(config):
     Generates and saves causal abstraction data based on a config dictionary.
     Handles both linear and non-linear model types.
     """
+    np.random.seed(config['seed'])
     # --- 1. Unpack Configuration ---
     experiment = config['experiment_name']
     model_type = config['model_type']

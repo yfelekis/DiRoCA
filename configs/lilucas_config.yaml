@@ -1,7 +1,6 @@
 model_type: 'linear_anm'
-
 experiment_name: 'lilucas'
-
+seed: 42
 # Number of samples to generate for each model
 num_llsamples: 10000
 num_hlsamples: 10000
