@@ -1,8 +1,8 @@
 # Hyperparameters for the Empirical Barycentric Optimization Method
 
-max_iter: 100
+max_iter: 2000
 tol: 0.0001
 seed: 42
 
 # We still need k_folds for the cross-validation setup itself
-k_folds: 5
+k_folds: 10

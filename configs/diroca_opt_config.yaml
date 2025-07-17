@@ -7,20 +7,18 @@ lambda_param_H: 0.1
 # Optimization parameters
 eta_max: 0.001
 eta_min: 0.001
-max_iter: 20
+max_iter: 1000
 num_steps_min: 5
 num_steps_max: 2
 tol: 0.0001
 
 # K-Fold Cross-Validation settings
-k_folds: 2
+k_folds: 10
 
-# --- ADD/UPDATE THESE PARAMETERS ---
 seed: 42             # For all random operations, including KFold
 plot_steps: false
 plot_epochs: false
 display_results: false
-# --- END OF ADDED PARAMETERS ---
 
 # Method flags
 xavier: false

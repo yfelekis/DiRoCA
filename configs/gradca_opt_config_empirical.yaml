@@ -5,13 +5,13 @@ delta: 0.0
 # Optimization parameters
 eta_max: 0.001
 eta_min: 0.001
-max_iter: 20
+max_iter: 2000
 num_steps_min: 5
 num_steps_max: 2
 tol: 0.0001
 
 # K-Fold Cross-Validation settings
-k_folds: 2
+k_folds: 10
 
 # Seed and initialization
 seed: 23

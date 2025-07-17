@@ -121,7 +121,14 @@ def sqrtm_svd(A):
         S = torch.clamp(S, min=eps)
         S_sqrt = torch.sqrt(S)
         
-        return U @ torch.diag(S_sqrt) @ V.T
+        result = U @ torch.diag(S_sqrt) @ V.T
+        
+        # Additional check for numerical stability of result
+        if torch.isnan(result).any() or torch.isinf(result).any():
+            print("SVD result contains NaN/Inf, using fallback")
+            return torch.eye(A.shape[0], device=A.device) * torch.norm(A)
+        
+        return result
         
     except Exception as e:
         print(f"SVD failed: {e}")
@@ -924,6 +931,26 @@ def prox_grad_Sigma_L(T, Sigma_L_half, LLmodels, Sigma_H, HLmodels, omega, lambd
 
     Sigma_L_final         = (2 / (n+1)) * Sigma_L 
     Sigma_L_final         = diagonalize(Sigma_L_final)
+    
+    # Add numerical stability check and regularization
+    try:
+        Sigma_L_np = Sigma_L_final.detach().cpu().numpy()
+        Sigma_L_np = np.nan_to_num(Sigma_L_np, nan=1e-6, posinf=1e10, neginf=-1e10)
+        Sigma_L_np = 0.5 * (Sigma_L_np + Sigma_L_np.T)  # Ensure symmetry
+        
+        # Check eigenvalues
+        eigenvalues = np.linalg.eigvalsh(Sigma_L_np)
+        if np.any(eigenvalues < -1e-10):
+            # Regularize to make positive semi-definite
+            eigenvalues = np.maximum(eigenvalues, 1e-8)
+            U, _ = np.linalg.eigh(Sigma_L_np)
+            Sigma_L_np = U @ np.diag(eigenvalues) @ U.T
+            Sigma_L_final = torch.from_numpy(Sigma_L_np).float().to(Sigma_L_final.device)
+    except Exception as e:
+        print(f"WARNING: Numerical instability in prox_grad_Sigma_L: {e}")
+        # Return regularized identity matrix
+        n = Sigma_L_final.shape[0]
+        Sigma_L_final = torch.eye(n, device=Sigma_L_final.device) * 1e-6
 
     return Sigma_L_final
 
@@ -953,6 +980,26 @@ def prox_grad_Sigma_H(T, Sigma_H_half, LLmodels, Sigma_L, HLmodels, omega, lambd
     Sigma_H_final         = (2 / (n+1)) * Sigma_H
     Sigma_H_final         = diagonalize(Sigma_H_final)
     
+    # Add numerical stability check and regularization
+    try:
+        Sigma_H_np = Sigma_H_final.detach().cpu().numpy()
+        Sigma_H_np = np.nan_to_num(Sigma_H_np, nan=1e-6, posinf=1e10, neginf=-1e10)
+        Sigma_H_np = 0.5 * (Sigma_H_np + Sigma_H_np.T)  # Ensure symmetry
+        
+        # Check eigenvalues
+        eigenvalues = np.linalg.eigvalsh(Sigma_H_np)
+        if np.any(eigenvalues < -1e-10):
+            # Regularize to make positive semi-definite
+            eigenvalues = np.maximum(eigenvalues, 1e-8)
+            U, _ = np.linalg.eigh(Sigma_H_np)
+            Sigma_H_np = U @ np.diag(eigenvalues) @ U.T
+            Sigma_H_final = torch.from_numpy(Sigma_H_np).float().to(Sigma_H_final.device)
+    except Exception as e:
+        print(f"WARNING: Numerical instability in prox_grad_Sigma_H: {e}")
+        # Return regularized identity matrix
+        n = Sigma_H_final.shape[0]
+        Sigma_H_final = torch.eye(n, device=Sigma_H_final.device) * 1e-6
+
     return Sigma_H_final
 
 def optimize_min(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
@@ -1100,68 +1147,127 @@ def optimize_max(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega, hat
     return mu_L, Sigma_L, mu_H, Sigma_H, objective_theta_step, theta_objectives_epoch, max_converged
 
 def optimize_max_proxgrad(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, 
-                lambda_L, lambda_H, lambda_param_L, lambda_param_H, eta, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, monitor): # <-- Added monitor
+                lambda_L, lambda_H, lambda_param_L, lambda_param_H, eta, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, monitor):
 
     torch.manual_seed(seed)
     Ill = list(LLmodels.keys())
-    cur_T   = T.clone().detach() # Detach T as it's not being optimized here
+    cur_T = T.clone().detach()
 
-    mu_L    = mu_L.clone().detach().requires_grad_(True)
-    mu_H    = mu_H.clone().detach().requires_grad_(True)
-    Sigma_L = Sigma_L.clone().detach().requires_grad_(True)
-    Sigma_H = Sigma_H.clone().detach().requires_grad_(True)
-
-
-    max_converged = False
+    # Create local copies for optimization
+    mu_L_optim, mu_H_optim = mu_L.clone().detach().requires_grad_(True), mu_H.clone().detach().requires_grad_(True)
+    Sigma_L_optim, Sigma_H_optim = Sigma_L.clone().detach().requires_grad_(True), Sigma_H.clone().detach().requires_grad_(True)
     
+    # Setup optimizers
     if delta == 0:
-        optimizer_mu    = torch.optim.Adam([mu_L], lr=eta)
-        optimizer_sigma = torch.optim.Adam([Sigma_L], lr=eta)
+        optimizer_mu, optimizer_sigma = torch.optim.Adam([mu_L_optim], lr=eta), torch.optim.Adam([Sigma_L_optim], lr=eta)
     elif epsilon == 0:
-        optimizer_mu    = torch.optim.Adam([mu_H], lr=eta)
-        optimizer_sigma = torch.optim.Adam([Sigma_H], lr=eta)
+        optimizer_mu, optimizer_sigma = torch.optim.Adam([mu_H_optim], lr=eta), torch.optim.Adam([Sigma_H_optim], lr=eta)
     else:
-        optimizer_mu    = torch.optim.Adam([mu_L, mu_H], lr=eta)
-        optimizer_sigma = torch.optim.Adam([Sigma_L, Sigma_H], lr=eta)
-
+        optimizer_mu, optimizer_sigma = torch.optim.Adam([mu_L_optim, mu_H_optim], lr=eta), torch.optim.Adam([Sigma_L_optim, Sigma_H_optim], lr=eta)
     
     for _ in range(num_steps_max):
         optimizer_mu.zero_grad()
         optimizer_sigma.zero_grad()
         
+        # Calculate objective
         obj_values = []
         for n, iota in enumerate(Ill):
             L_i = torch.from_numpy(LLmodels[iota].F).float().to(T.device)
             H_i = torch.from_numpy(HLmodels[omega[iota]].F).float().to(T.device)
-            
-            obj_value_iota = compute_objective_value(cur_T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H, 
-                                                            lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
-                                                            epsilon, delta, project_onto_gelbrich)
+            obj_value_iota = compute_objective_value(cur_T, L_i, H_i, mu_L_optim, mu_H_optim, Sigma_L_optim, Sigma_H_optim, 
+                                                     lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
+                                                     epsilon, delta, project_onto_gelbrich)
             obj_values.append(obj_value_iota)
+        objective = -(torch.stack(obj_values).sum() / (n + 1))
         
-        objective_iota = torch.stack(obj_values).sum()
-        objective = -(objective_iota / (n + 1))
-        
-        # Track the actual (non-negated) objective value
         monitor.track_max_step(-objective.item())
-
         objective.backward()
         
+        # Update parameters
         optimizer_mu.step()
-        
-        Sigma_L_half = Sigma_L.detach().clone()
-        Sigma_H_half = Sigma_H.detach().clone()
-        
         optimizer_sigma.step()
-
+        
+        # In-place proximal update
         with torch.no_grad():
-            Sigma_L_new = prox_grad_Sigma_L(cur_T, Sigma_L_half, LLmodels, Sigma_H_half, HLmodels, omega, lambda_param_L)
-            Sigma_H_new = prox_grad_Sigma_H(cur_T, Sigma_H_half, LLmodels, Sigma_L_new, HLmodels, omega, lambda_param_H)
-            
-            Sigma_L.data = Sigma_L_new.data
-            Sigma_H.data = Sigma_H_new.data
+            Sigma_L_new = prox_grad_Sigma_L(cur_T, Sigma_L_optim, LLmodels, Sigma_H_optim, HLmodels, omega, lambda_param_L)
+            Sigma_H_new = prox_grad_Sigma_H(cur_T, Sigma_H_optim, LLmodels, Sigma_L_optim, HLmodels, omega, lambda_param_H)
+            Sigma_L_optim.data.copy_(Sigma_L_new.data)
+            Sigma_H_optim.data.copy_(Sigma_H_new.data)
 
-    return (mu_L.detach(), Sigma_L.detach(), mu_H.detach(), Sigma_H.detach(), -objective.detach(), max_converged)
+        # --- THIS IS THE FIX: Add Regularization ---
+        # Add a small "jitter" to the diagonal of the covariance matrices
+        # to ensure they remain numerically stable and positive definite.
+        with torch.no_grad():
+            jitter_L = 1e-6 * torch.eye(Sigma_L_optim.shape[0], device=Sigma_L_optim.device)
+            jitter_H = 1e-6 * torch.eye(Sigma_H_optim.shape[0], device=Sigma_H_optim.device)
+            Sigma_L_optim.add_(jitter_L)
+            Sigma_H_optim.add_(jitter_H)
+        # --- END OF FIX ---
+
+    return (mu_L_optim.detach(), Sigma_L_optim.detach(), mu_H_optim.detach(), Sigma_H_optim.detach(), -objective.detach(), False)
+# def optimize_max_proxgrad(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, 
+#                 lambda_L, lambda_H, lambda_param_L, lambda_param_H, eta, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, monitor): # <-- Added monitor
+
+#     torch.manual_seed(seed)
+#     Ill = list(LLmodels.keys())
+#     cur_T   = T.clone().detach() # Detach T as it's not being optimized here
+
+#     mu_L    = mu_L.clone().detach().requires_grad_(True)
+#     mu_H    = mu_H.clone().detach().requires_grad_(True)
+#     Sigma_L = Sigma_L.clone().detach().requires_grad_(True)
+#     Sigma_H = Sigma_H.clone().detach().requires_grad_(True)
+
+
+#     max_converged = False
+    
+#     if delta == 0:
+#         optimizer_mu    = torch.optim.Adam([mu_L], lr=eta)
+#         optimizer_sigma = torch.optim.Adam([Sigma_L], lr=eta)
+#     elif epsilon == 0:
+#         optimizer_mu    = torch.optim.Adam([mu_H], lr=eta)
+#         optimizer_sigma = torch.optim.Adam([Sigma_H], lr=eta)
+#     else:
+#         optimizer_mu    = torch.optim.Adam([mu_L, mu_H], lr=eta)
+#         optimizer_sigma = torch.optim.Adam([Sigma_L, Sigma_H], lr=eta)
+
+    
+#     for _ in range(num_steps_max):
+#         optimizer_mu.zero_grad()
+#         optimizer_sigma.zero_grad()
+        
+#         obj_values = []
+#         for n, iota in enumerate(Ill):
+#             L_i = torch.from_numpy(LLmodels[iota].F).float().to(T.device)
+#             H_i = torch.from_numpy(HLmodels[omega[iota]].F).float().to(T.device)
+            
+#             obj_value_iota = compute_objective_value(cur_T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H, 
+#                                                             lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
+#                                                             epsilon, delta, project_onto_gelbrich)
+#             obj_values.append(obj_value_iota)
+        
+#         objective_iota = torch.stack(obj_values).sum()
+#         objective = -(objective_iota / (n + 1))
+        
+#         # Track the actual (non-negated) objective value
+#         monitor.track_max_step(-objective.item())
+
+#         objective.backward()
+        
+#         optimizer_mu.step()
+        
+#         Sigma_L_half = Sigma_L.detach().clone()
+#         Sigma_H_half = Sigma_H.detach().clone()
+        
+#         optimizer_sigma.step()
+
+#         with torch.no_grad():
+#             Sigma_L_new = prox_grad_Sigma_L(cur_T, Sigma_L_half, LLmodels, Sigma_H_half, HLmodels, omega, lambda_param_L)
+#             Sigma_H_new = prox_grad_Sigma_H(cur_T, Sigma_H_half, LLmodels, Sigma_L_new, HLmodels, omega, lambda_param_H)
+            
+#             Sigma_L.data = Sigma_L_new.data
+#             Sigma_H.data = Sigma_H_new.data
+
+#     return (mu_L.detach(), Sigma_L.detach(), mu_H.detach(), Sigma_H.detach(), -objective.detach(), max_converged)
 
 def compute_worst_case_distance(mu_worst, Sigma_worst, params_hat):
 
@@ -1424,9 +1530,43 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
 
             # --- NEW DEBUGGING CHECK ---
             # Check if the Sigma matrix from the max step is valid before projecting
-            eigenvalues = np.linalg.eigvalsh(Sigma_L.detach().cpu().numpy())
-            if np.any(eigenvalues < 0):
-                print(f"WARNING: Epoch {epoch}, Sigma_L is NOT positive semi-definite! Smallest eigenvalue: {eigenvalues.min():.4f}")
+            try:
+                # First, ensure the matrix is numerically stable
+                Sigma_L_np = Sigma_L.detach().cpu().numpy()
+                Sigma_L_np = np.nan_to_num(Sigma_L_np, nan=1e-6, posinf=1e10, neginf=-1e10)
+                
+                # Ensure symmetry
+                Sigma_L_np = 0.5 * (Sigma_L_np + Sigma_L_np.T)
+                
+                # Add small regularization for numerical stability
+                eps_reg = 1e-8
+                Sigma_L_np = Sigma_L_np + eps_reg * np.eye(Sigma_L_np.shape[0])
+                
+                # Now try to compute eigenvalues
+                eigenvalues = np.linalg.eigvalsh(Sigma_L_np)
+                
+                if np.any(eigenvalues < -1e-10):  # Allow for small numerical errors
+                    print(f"WARNING: Epoch {epoch}, Sigma_L is NOT positive semi-definite! Smallest eigenvalue: {eigenvalues.min():.4f}")
+                    # Regularize the matrix to make it positive semi-definite
+                    eigenvalues = np.maximum(eigenvalues, 1e-8)
+                    U, _ = np.linalg.eigh(Sigma_L_np)
+                    Sigma_L_np = U @ np.diag(eigenvalues) @ U.T
+                    # Update the tensor
+                    Sigma_L.data = torch.from_numpy(Sigma_L_np).float().to(Sigma_L.device)
+                    
+            except np.linalg.LinAlgError as e:
+                print(f"WARNING: Epoch {epoch}, eigenvalue computation failed: {e}")
+                print("Regularizing Sigma_L matrix...")
+                # Create a regularized identity matrix as fallback
+                n = Sigma_L.shape[0]
+                Sigma_L_reg = torch.eye(n, device=Sigma_L.device) * 1e-6
+                Sigma_L.data = Sigma_L_reg
+            except Exception as e:
+                print(f"WARNING: Epoch {epoch}, unexpected error in eigenvalue check: {e}")
+                # Create a regularized identity matrix as fallback
+                n = Sigma_L.shape[0]
+                Sigma_L_reg = torch.eye(n, device=Sigma_L.device) * 1e-6
+                Sigma_L.data = Sigma_L_reg
             # --- END OF CHECK ---
 
             if project_onto_gelbrich:
@@ -1440,7 +1580,16 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
         
         # --- MODIFIED: Calculate and track all end-of-epoch metrics ---
         delta_objective = abs(previous_objective - objective_T.item())
-        condition_num = evut.condition_number(T_new.detach().numpy())
+        
+        # Add safety check for T matrix
+        try:
+            T_np = T_new.detach().cpu().numpy()
+            T_np = np.nan_to_num(T_np, nan=1e-6, posinf=1e10, neginf=-1e10)
+            condition_num = evut.condition_number(T_np)
+        except Exception as e:
+            print(f"WARNING: Epoch {epoch}, condition number computation failed: {e}")
+            condition_num = 1e6  # Large condition number as fallback
+            
         delta_T_norm = torch.norm(T_new - T_prev).item()
         
         # monitor.track_epoch_metrics(
