@@ -9,7 +9,7 @@ import joblib
 import numpy as np
 
 # Import your existing params
-import params
+import configs_cookbook
 
 
 class ExperimentConfig:
@@ -33,11 +33,11 @@ class ExperimentConfig:
     
     def _load_experiment_params(self):
         """Load experiment-specific parameters from params.py."""
-        if self.experiment_name not in params.n_samples:
+        if self.experiment_name not in configs_cookbook.n_samples:
             raise ValueError(f"Experiment '{self.experiment_name}' not found in params.py")
         
-        self.n_samples = params.n_samples[self.experiment_name]
-        self.n_envs = params.n_envs[self.experiment_name]
+        self.n_samples = configs_cookbook.n_samples[self.experiment_name]
+        self.n_envs = configs_cookbook.n_envs[self.experiment_name]
     
     def get_data_path(self, filename: str) -> str:
         """Get full path for a data file."""
