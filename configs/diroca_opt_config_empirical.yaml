@@ -1,7 +1,7 @@
 eta_max: 0.001
 eta_min: 0.001
 
-max_iter: 1000
+max_iter: 2000
 num_steps_min: 5
 num_steps_max: 2
 tol: 0.0001
@@ -9,7 +9,7 @@ tol: 0.0001
 # K-Fold Cross-Validation settings
 k_folds: 10
 
-seed: 23
+seed: 23 # 42
 robust_L: true 
 robust_H: true
 

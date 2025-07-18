@@ -5,7 +5,7 @@ delta: 0.0
 # Optimization parameters
 eta_max: 0.001
 eta_min: 0.001
-max_iter: 2000
+max_iter: 3000
 num_steps_min: 5
 num_steps_max: 2
 tol: 0.0001
@@ -14,7 +14,7 @@ tol: 0.0001
 k_folds: 10
 
 # Seed and initialization
-seed: 23
+seed: 23 # 42
 initialization: 'random'
 
 # Method flags - This disables the robust part of the optimization

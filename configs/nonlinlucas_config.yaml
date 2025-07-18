@@ -1,6 +1,6 @@
 model_type: 'continuous_nonlinear_anm'
 experiment_name: 'nonlinlucas'
-seed: 42
+seed: 23
 
 num_llsamples: 10000
 num_hlsamples: 10000

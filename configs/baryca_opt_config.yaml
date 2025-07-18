@@ -8,4 +8,4 @@ tol: 0.0001
 display_results: false
 
 k_folds: 2
-seed: 42
+seed: 23 # 42
