@@ -497,6 +497,41 @@ def compute_objective_value(T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H,
 
     return val
 
+def compute_surrogate_objective_value(T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H, 
+                                      lambda_L, lambda_H, hat_mu_L, hat_mu_H, 
+                                      hat_Sigma_L, hat_Sigma_H, epsilon, delta, project_onto_gelbrich):
+    """
+    Computes the simplified surrogate objective F_tilde, where the non-smooth
+    term is replaced by the product of Frobenius norms.
+    """
+    # The Smooth Part (F_s) 
+    term1 = torch.norm(T @ L_i @ mu_L - H_i @ mu_H) ** 2
+    TL_Sigma_LLT = regmat(T @ L_i @ Sigma_L @ L_i.T @ T.T)
+    term2 = torch.trace(TL_Sigma_LLT)
+    H_Sigma_HH = regmat(H_i @ Sigma_H @ H_i.T)
+    term3 = torch.trace(H_Sigma_HH)
+
+    # The Non-Smooth Part (F*_n) is now the simplified surrogate
+    S_l_sqrt = sqrtm_svd(TL_Sigma_LLT)
+    S_h_sqrt = sqrtm_svd(H_Sigma_HH)
+    term4_surrogate = -2 * torch.norm(S_l_sqrt, p='fro') * torch.norm(S_h_sqrt, p='fro')
+    
+    # Regularization terms
+    Sigma_L_sqrt     = sqrtm_svd(Sigma_L)
+    hat_Sigma_L_sqrt = sqrtm_svd(hat_Sigma_L)
+    Sigma_H_sqrt     = sqrtm_svd(Sigma_H)
+    hat_Sigma_H_sqrt = sqrtm_svd(hat_Sigma_H)
+
+    reg_L    = lambda_L * (torch.norm(mu_L - hat_mu_L) ** 2 + torch.norm(Sigma_L_sqrt - hat_Sigma_L_sqrt, p='fro') ** 2 - epsilon**2)
+    reg_H    = lambda_H * (torch.norm(mu_H - hat_mu_H) ** 2 + torch.norm(Sigma_H_sqrt - hat_Sigma_H_sqrt, p='fro') ** 2 - delta**2)
+
+
+    # Total value using the new surrogate term
+    if project_onto_gelbrich:
+        val = term1 + term2 + term3 + term4_surrogate
+    else:
+        val = term1 + term2 + term3 + term4_surrogate + reg_L + reg_H 
+    return val
 
 # def compute_objective_value_no_max(T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H):
 
@@ -1210,8 +1245,70 @@ def optimize_max_proxgrad(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, o
 
     return (mu_L.detach(), Sigma_L.detach(), mu_H.detach(), Sigma_H.detach(), -objective.detach(), max_converged)
 
-def optimize_max_proxgrad_stable(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, 
-                lambda_L, lambda_H, lambda_param_L, lambda_param_H, eta, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, monitor):
+# def optimize_max_proxgrad_stable(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, 
+#                 lambda_L, lambda_H, lambda_param_L, lambda_param_H, eta, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, monitor):
+
+#     torch.manual_seed(seed)
+#     Ill = list(LLmodels.keys())
+#     cur_T = T.clone().detach()
+
+#     # Create local, optimizable copies of the parameters
+#     mu_L_optim, mu_H_optim = mu_L.clone().detach().requires_grad_(True), mu_H.clone().detach().requires_grad_(True)
+#     Sigma_L_optim, Sigma_H_optim = Sigma_L.clone().detach().requires_grad_(True), Sigma_H.clone().detach().requires_grad_(True)
+    
+#     # Use a single, unified optimizer for all parameters
+#     if delta == 0:
+#         optimizer = torch.optim.Adam([mu_L_optim, Sigma_L_optim], lr=eta)
+#     elif epsilon == 0:
+#         optimizer = torch.optim.Adam([mu_H_optim, Sigma_H_optim], lr=eta)
+#     else:
+#         optimizer = torch.optim.Adam([mu_L_optim, mu_H_optim, Sigma_L_optim, Sigma_H_optim], lr=eta)
+    
+#     for _ in range(num_steps_max):
+#         optimizer.zero_grad()
+        
+#         # Calculate the objective value
+#         obj_values = []
+#         for n, iota in enumerate(Ill):
+#             L_i = torch.from_numpy(LLmodels[iota].F).float()
+#             H_i = torch.from_numpy(HLmodels[omega[iota]].F).float()
+#             obj_value_iota = compute_objective_value(cur_T, L_i, H_i, mu_L_optim, mu_H_optim, Sigma_L_optim, Sigma_H_optim, 
+#                                                      lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
+#                                                      epsilon, delta, project_onto_gelbrich)
+#             obj_values.append(obj_value_iota)
+        
+#         objective = -(torch.stack(obj_values).sum() / (n + 1))
+        
+#         monitor.track_max_step(-objective.item())
+#         objective.backward()
+        
+#         # --- Corrected Update Logic ---
+#         # 1. Store the state of Sigma BEFORE the optimizer step to replicate the original, stable logic.
+#         Sigma_L_before_step = Sigma_L_optim.detach().clone()
+#         Sigma_H_before_step = Sigma_H_optim.detach().clone()
+        
+#         # 2. Update all parameters with the Adam optimizer
+#         optimizer.step()
+        
+#         # 3. Perform the proximal and regularization steps
+#         with torch.no_grad():
+#             # Call the proximal functions on the state from BEFORE the Adam step
+#             Sigma_L_new = prox_grad_Sigma_L(cur_T, Sigma_L_before_step, LLmodels, Sigma_H_before_step, HLmodels, omega, lambda_param_L)
+#             Sigma_H_new = prox_grad_Sigma_H(cur_T, Sigma_H_before_step, LLmodels, Sigma_L_before_step, HLmodels, omega, lambda_param_H)
+            
+#             # Update the optimizer's tensors in-place with the result
+#             Sigma_L_optim.data.copy_(Sigma_L_new.data)
+#             Sigma_H_optim.data.copy_(Sigma_H_new.data)
+#             print('jittering')
+#             # Add regularization "jitter" for guaranteed stability
+#             jitter_L = 1e-5 * torch.eye(Sigma_L_optim.shape[0], device=Sigma_L_optim.device)
+#             jitter_H = 1e-5 * torch.eye(Sigma_H_optim.shape[0], device=Sigma_H_optim.device)
+#             Sigma_L_optim.add_(jitter_L)
+#             Sigma_H_optim.add_(jitter_H)
+            
+#     return (mu_L_optim.detach(), Sigma_L_optim.detach(), mu_H_optim.detach(), Sigma_H_optim.detach(), -objective.detach(), False)
+def optimize_max_surrogate(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H, 
+                           lambda_L, lambda_H, lambda_param_L, lambda_param_H, eta, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, monitor, experiment):
 
     torch.manual_seed(seed)
     Ill = list(LLmodels.keys())
@@ -1222,24 +1319,22 @@ def optimize_max_proxgrad_stable(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmo
     Sigma_L_optim, Sigma_H_optim = Sigma_L.clone().detach().requires_grad_(True), Sigma_H.clone().detach().requires_grad_(True)
     
     # Use a single, unified optimizer for all parameters
-    if delta == 0:
-        optimizer = torch.optim.Adam([mu_L_optim, Sigma_L_optim], lr=eta)
-    elif epsilon == 0:
-        optimizer = torch.optim.Adam([mu_H_optim, Sigma_H_optim], lr=eta)
-    else:
-        optimizer = torch.optim.Adam([mu_L_optim, mu_H_optim, Sigma_L_optim, Sigma_H_optim], lr=eta)
+    optimizer = torch.optim.Adam([mu_L_optim, mu_H_optim, Sigma_L_optim, Sigma_H_optim], lr=eta)
     
     for _ in range(num_steps_max):
         optimizer.zero_grad()
         
-        # Calculate the objective value
+        # Calculate the objective value using the SURROGATE function
         obj_values = []
         for n, iota in enumerate(Ill):
             L_i = torch.from_numpy(LLmodels[iota].F).float()
             H_i = torch.from_numpy(HLmodels[omega[iota]].F).float()
-            obj_value_iota = compute_objective_value(cur_T, L_i, H_i, mu_L_optim, mu_H_optim, Sigma_L_optim, Sigma_H_optim, 
-                                                     lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
-                                                     epsilon, delta, project_onto_gelbrich)
+            # --- THIS IS THE KEY CHANGE ---
+            obj_value_iota = compute_surrogate_objective_value(
+                cur_T, L_i, H_i, mu_L_optim, mu_H_optim, Sigma_L_optim, Sigma_H_optim, 
+                lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
+                epsilon, delta, project_onto_gelbrich
+            )
             obj_values.append(obj_value_iota)
         
         objective = -(torch.stack(obj_values).sum() / (n + 1))
@@ -1247,16 +1342,20 @@ def optimize_max_proxgrad_stable(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmo
         monitor.track_max_step(-objective.item())
         objective.backward()
         
-        # --- Corrected Update Logic ---
-        # 1. Store the state of Sigma BEFORE the optimizer step to replicate the original, stable logic.
+        # Store the state of Sigma BEFORE the optimizer step
         Sigma_L_before_step = Sigma_L_optim.detach().clone()
         Sigma_H_before_step = Sigma_H_optim.detach().clone()
         
-        # 2. Update all parameters with the Adam optimizer
+        # Update all parameters with the Adam optimizer
         optimizer.step()
         
-        # 3. Perform the proximal and regularization steps
+        # Perform the proximal and regularization steps
         with torch.no_grad():
+            jitter_L = 1e-5 * torch.eye(Sigma_L_optim.shape[0], device=Sigma_L_optim.device)
+            jitter_H = 1e-5 * torch.eye(Sigma_H_optim.shape[0], device=Sigma_H_optim.device)
+            Sigma_L_optim.add_(jitter_L)
+            Sigma_H_optim.add_(jitter_H)
+
             # Call the proximal functions on the state from BEFORE the Adam step
             Sigma_L_new = prox_grad_Sigma_L(cur_T, Sigma_L_before_step, LLmodels, Sigma_H_before_step, HLmodels, omega, lambda_param_L)
             Sigma_H_new = prox_grad_Sigma_H(cur_T, Sigma_H_before_step, LLmodels, Sigma_L_before_step, HLmodels, omega, lambda_param_H)
@@ -1264,13 +1363,22 @@ def optimize_max_proxgrad_stable(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmo
             # Update the optimizer's tensors in-place with the result
             Sigma_L_optim.data.copy_(Sigma_L_new.data)
             Sigma_H_optim.data.copy_(Sigma_H_new.data)
-
-            # Add regularization "jitter" for guaranteed stability
-            jitter_L = 1e-6 * torch.eye(Sigma_L_optim.shape[0], device=Sigma_L_optim.device)
-            jitter_H = 1e-6 * torch.eye(Sigma_H_optim.shape[0], device=Sigma_H_optim.device)
-            Sigma_L_optim.add_(jitter_L)
-            Sigma_H_optim.add_(jitter_H)
             
+            # # Add regularization "jitter" for guaranteed stability
+            # jitter_L = 1e-5 * torch.eye(Sigma_L_optim.shape[0], device=Sigma_L_optim.device)
+            # jitter_H = 1e-5 * torch.eye(Sigma_H_optim.shape[0], device=Sigma_H_optim.device)
+            # Sigma_L_optim.add_(jitter_L)
+            # Sigma_H_optim.add_(jitter_H)
+            
+            if experiment == 'lilucas':
+                mu_clip_val = 20.0
+                sigma_clip_val = 40.0
+            
+                mu_L_optim.clamp_(-mu_clip_val, mu_clip_val)
+                mu_H_optim.clamp_(-mu_clip_val, mu_clip_val)
+                Sigma_L_optim.clamp_(-sigma_clip_val, sigma_clip_val)
+                Sigma_H_optim.clamp_(-sigma_clip_val, sigma_clip_val)
+
     return (mu_L_optim.detach(), Sigma_L_optim.detach(), mu_H_optim.detach(), Sigma_H_optim.detach(), -objective.detach(), False)
 
 def compute_worst_case_distance(mu_worst, Sigma_worst, params_hat):
@@ -1526,11 +1634,11 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
             return {'L': paramsL, 'H': paramsH}, T_prev.numpy()
 
         if method == 'erica' and not max_converged:
-            mu_L, Sigma_L, mu_H, Sigma_H, obj_theta, max_converged = optimize_max_proxgrad_stable(
+            mu_L, Sigma_L, mu_H, Sigma_H, obj_theta, max_converged = optimize_max_surrogate(
                 T_new, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
                 hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
                 lambda_L, lambda_H, lambda_param_L, lambda_param_H,
-                eta_max, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, monitor)
+                eta_max, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, monitor, experiment)
 
             # --- NEW DEBUGGING CHECK ---
             # Check if the Sigma matrix from the max step is valid before projecting
@@ -1655,6 +1763,143 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
         
     return {'L': paramsL, 'H': paramsH}, T_final, monitor
 
+
+# def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmodels, omega,
+#                            lambda_L, lambda_H, lambda_param_L, lambda_param_H,
+#                            xavier, project_onto_gelbrich, eta_min, eta_max, max_iter,
+#                            num_steps_min, num_steps_max, proximal_grad, tol, seed,
+#                            robust_L, robust_H, grad_clip, plot_steps, plot_epochs,
+#                            display_results, experiment,
+#                            device, verbose, debug_mode, early_stopping, patience):
+
+#     torch.manual_seed(seed)
+#     start_time = time.time()
+#     run_device = torch.device('cuda' if torch.cuda.is_available() and device == 'cuda' else 'cpu')
+#     print(f"Running optimization on device: {run_device}")
+
+#     epsilon = theta_hatL['radius'] if robust_L else 0
+#     delta = theta_hatH['radius'] if robust_H else 0
+#     method = 'erica' if robust_L or robust_H else 'enrico'
+#     max_grad_norm = 1.0 if grad_clip else float('inf')
+
+#     mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H = get_initialization(
+#         theta_hatL, theta_hatH, epsilon, delta, initial_theta)
+    
+#     # Move all tensors to the selected device
+#     mu_L, Sigma_L = mu_L.to(run_device), Sigma_L.to(run_device)
+#     mu_H, Sigma_H = mu_H.to(run_device), Sigma_H.to(run_device)
+#     hat_mu_L, hat_Sigma_L = hat_mu_L.to(run_device), hat_Sigma_L.to(run_device)
+#     hat_mu_H, hat_Sigma_H = hat_mu_H.to(run_device), hat_Sigma_H.to(run_device)
+
+#     T = torch.randn(mu_H.shape[0], mu_L.shape[0], requires_grad=True, device=run_device)
+#     optimizer_T = torch.optim.Adam([T], lr=eta_min)
+    
+#     monitor = TrainingMonitor()
+#     previous_objective = float('inf')
+#     best_objective = float('inf')
+#     epochs_without_improvement = 0
+
+#     for epoch in tqdm(range(max_iter), desc="Optimizing"):
+#         monitor.start_epoch()
+#         T_prev = T.detach().clone()
+        
+#         # Store the last known good parameters
+#         mu_L_last_good, Sigma_L_last_good = mu_L.clone(), Sigma_L.clone()
+#         mu_H_last_good, Sigma_H_last_good = mu_H.clone(), Sigma_H.clone()
+
+#         try:
+#             # --- MINIMIZATION STEP ---
+#             T_new, objective_T, hit_nan = optimize_min(
+#                 T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
+#                 lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
+#                 epsilon, delta, num_steps_min, optimizer_T, max_grad_norm, seed,
+#                 project_onto_gelbrich, xavier, monitor)
+
+#             if hit_nan:
+#                 raise RuntimeError("Unrecoverable NaN encountered during optimization_min step.")
+
+#             # --- MAXIMIZATION STEP ---
+#             if method == 'erica':
+#                 mu_L, Sigma_L, mu_H, Sigma_H, obj_theta, max_converged = optimize_max_proxgrad(
+#                     T_new, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
+#                     hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H,
+#                     lambda_L, lambda_H, lambda_param_L, lambda_param_H,
+#                     eta_max, num_steps_max, epsilon, delta, seed, project_onto_gelbrich, monitor)
+
+#                 if project_onto_gelbrich:
+#                     mu_L, Sigma_L = project_onto_gelbrich_ball(mu_L, Sigma_L, hat_mu_L, hat_Sigma_L, epsilon)
+#                     mu_H, Sigma_H = project_onto_gelbrich_ball(mu_H, Sigma_H, hat_mu_H, hat_Sigma_H, delta)
+            
+#             # If we got here, the epoch was successful, update T
+#             T = T_new
+#             current_objective = objective_T.item()
+
+#         except Exception as e:
+#             # --- FAULT-TOLERANCE: Catch any numerical error from min or max steps ---
+#             print(f"\nWARNING: Epoch {epoch+1} failed due to numerical instability: {e}")
+#             print("         Reverting to parameters from the previous stable epoch and continuing.")
+#             # Restore the last known good parameters
+#             mu_L, Sigma_L = mu_L_last_good, Sigma_L_last_good
+#             mu_H, Sigma_H = mu_H_last_good, Sigma_H_last_good
+#             # We don't update T, and the objective is the same as the last successful one
+#             current_objective = previous_objective
+#             # --- END OF FAULT-TOLERANCE ---
+
+#         monitor.end_epoch()
+#         if plot_steps: monitor.plot_epoch_progress(epoch)
+        
+#         delta_objective = abs(previous_objective - current_objective)
+#         monitor.track_epoch_metrics(
+#             delta_obj=delta_objective, cond_num=evut.condition_number(T.detach().cpu().numpy()),
+#             delta_T=torch.norm(T - T_prev).item(), mu_L=mu_L, sigma_L=Sigma_L,
+#             mu_H=mu_H, sigma_H=Sigma_H)
+
+#         if early_stopping:
+#             if current_objective < best_objective - tol:
+#                 best_objective, epochs_without_improvement = current_objective, 0
+#             else:
+#                 epochs_without_improvement += 1
+#             if epochs_without_improvement >= patience:
+#                 print(f"\nStopping early after {patience} epochs with no improvement.")
+#                 break
+        
+#         if delta_objective < tol:
+#             print(f"Convergence reached at epoch {epoch+1}")
+#             break
+        
+#         previous_objective = current_objective
+
+#     if plot_epochs: monitor.plot_run_summary()
+    
+#     # --- Final Parameter Packaging ---
+#     paramsL = {
+#         'mu_U': mu_L.detach().cpu().numpy(),
+#         'Sigma_U': Sigma_L.detach().cpu().numpy(),
+#         'g_squared': epsilon,
+#         'mu_hat': theta_hatL['mu_U'],
+#         'Sigma_hat': theta_hatL['Sigma_U'],
+#         'radius': epsilon
+#     }
+#     paramsH = {
+#         'mu_U': mu_H.detach().cpu().numpy(),
+#         'Sigma_U': Sigma_H.detach().cpu().numpy(),
+#         'g_squared': delta,
+#         'mu_hat': theta_hatH['mu_U'],
+#         'Sigma_hat': theta_hatH['Sigma_U'],
+#         'radius': delta
+#     }
+#     if method == 'erica':
+#         paramsL['g_squared'] = np.sqrt(evut.compute_worst_case_distance(paramsL))
+#         paramsH['g_squared'] = np.sqrt(evut.compute_worst_case_distance(paramsH))
+
+#     T_final = T.detach().cpu().numpy()
+#     end_time = time.time()
+    
+#     if display_results:
+#         elapsed_time = end_time - start_time
+#         print_results(T_final, paramsL, paramsH, elapsed_time)
+        
+#     return {'L': paramsL, 'H': paramsH}, T_final, monitor
 
 import torch
 import numpy as np
