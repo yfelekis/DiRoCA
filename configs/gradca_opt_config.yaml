@@ -7,13 +7,13 @@ lambda_param_H: 0.1
 # Optimization parameters
 eta_max: 0.001
 eta_min: 0.001
-max_iter: 2000
+max_iter: 3000
 num_steps_min: 5
 num_steps_max: 2
 tol: 0.0001
 
 # K-Fold Cross-Validation settings
-k_folds: 2
+k_folds: 5
 
 # --- ADD/UPDATE THESE PARAMETERS ---
 seed: 23 # 42             # For all random operations, including KFold
@@ -24,7 +24,7 @@ display_results: false
 
 # Method flags
 xavier: false
-project_onto_gelbrich: false
+project_onto_gelbrich: true
 proximal_grad: true
 grad_clip: true
 robust_L: false

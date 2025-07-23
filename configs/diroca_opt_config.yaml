@@ -13,7 +13,7 @@ num_steps_max: 2
 tol: 0.0001
 
 # K-Fold Cross-Validation settings
-k_folds: 2
+k_folds: 5
 
 seed: 23 # 42             # For all random operations, including KFold
 plot_steps: false

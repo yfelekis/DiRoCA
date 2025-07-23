@@ -3,9 +3,9 @@
 projection_method: 'svd'
 initialization: 'avg'
 autograd: false
-max_iter: 2000
+max_iter: 3000
 tol: 0.0001
 display_results: false
 
-k_folds: 2
+k_folds: 5
 seed: 23 # 42
