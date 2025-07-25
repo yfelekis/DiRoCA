@@ -13,26 +13,30 @@ def parse_evaluation_filename(filename):
     """
     Parse detailed evaluation filename to extract all parameters.
     
-    Example: evaluation_additive_gaussian_alpha10-0.0-1.0_noise20-0.0-10.0_trials20_zero_meanTrue_20241201_143022.csv
+    Examples: 
+    - evaluation_additive_gaussian_alpha10-0.0-1.0_noise20-0.0-10.0_trials20_zero_meanTrue_20241201_143022.csv
+    - empirical_evaluation_additive_gaussian_alpha5-0.0-1.0_noise5-0.0-10.0_trials2_zero_meanTrue_20241201_143022.csv
     """
-    pattern = r'evaluation_(\w+)_(\w+)_alpha(\d+)-([\d.]+)-([\d.]+)_noise(\d+)-([\d.]+)-([\d.]+)_trials(\d+)_zero_mean(\w+)_(\d{8})_(\d{6})\.csv'
+    # Pattern for both regular and empirical evaluations
+    pattern = r'(empirical_)?evaluation_(\w+)_(\w+)_alpha(\d+)-([\d.]+)-([\d.]+)_noise(\d+)-([\d.]+)-([\d.]+)_trials(\d+)_zero_mean(\w+)_(\d{8})_(\d{6})\.csv'
     match = re.match(pattern, filename)
     
     if match:
         return {
-            'shift_type': match.group(1),
-            'distribution': match.group(2),
-            'alpha_steps': int(match.group(3)),
-            'alpha_min': float(match.group(4)),
-            'alpha_max': float(match.group(5)),
-            'noise_steps': int(match.group(6)),
-            'noise_min': float(match.group(7)),
-            'noise_max': float(match.group(8)),
-            'trials': int(match.group(9)),
-            'zero_mean': match.group(10) == 'True',
-            'date': match.group(11),
-            'time': match.group(12),
-            'timestamp': f"{match.group(11)}_{match.group(12)}"
+            'evaluation_type': 'empirical' if match.group(1) else 'gaussian',
+            'shift_type': match.group(2),
+            'distribution': match.group(3),
+            'alpha_steps': int(match.group(4)),
+            'alpha_min': float(match.group(5)),
+            'alpha_max': float(match.group(6)),
+            'noise_steps': int(match.group(7)),
+            'noise_min': float(match.group(8)),
+            'noise_max': float(match.group(9)),
+            'trials': int(match.group(10)),
+            'zero_mean': match.group(11) == 'True',
+            'date': match.group(12),
+            'time': match.group(13),
+            'timestamp': f"{match.group(12)}_{match.group(13)}"
         }
     return None
 
@@ -73,7 +77,7 @@ def list_available_results(experiment=None, show_details=True):
         
         if show_details and params:
             print(f"    Parameters:")
-            print(f"      - Shift: {params['shift_type']} | Distribution: {params['distribution']}")
+            print(f"      - Type: {params['evaluation_type']} | Shift: {params['shift_type']} | Distribution: {params['distribution']}")
             print(f"      - Alpha: {params['alpha_steps']} steps ({params['alpha_min']:.1f} to {params['alpha_max']:.1f})")
             print(f"      - Noise: {params['noise_steps']} steps ({params['noise_min']:.1f} to {params['noise_max']:.1f})")
             print(f"      - Trials: {params['trials']} | Zero mean: {params['zero_mean']}")
@@ -82,10 +86,10 @@ def list_available_results(experiment=None, show_details=True):
     
     return files
 
-def load_results(experiment='slc', shift_type=None, distribution=None, 
+def load_results(experiment='slc', evaluation_type=None, shift_type=None, distribution=None, 
                 alpha_steps=None, alpha_min=None, alpha_max=None,
                 noise_steps=None, noise_min=None, noise_max=None,
-                trials=None, zero_mean=None, latest=True):
+                trials=None, zero_mean=None, latest=True, timestamp=None):
     """
     Load evaluation results by specifying any combination of parameters.
     
@@ -101,7 +105,8 @@ def load_results(experiment='slc', shift_type=None, distribution=None,
         noise_max (float): Maximum noise value
         trials (int): Number of trials
         zero_mean (bool): Whether zero mean was used
-        latest (bool): If True, load most recent matching file
+        latest (bool): If True, load most recent matching file (ignored if timestamp is specified)
+        timestamp (str): Specific timestamp to load (format: YYYYMMDD_HHMMSS)
     
     Returns:
         pd.DataFrame: The evaluation results
@@ -124,6 +129,8 @@ def load_results(experiment='slc', shift_type=None, distribution=None,
             continue
         
         # Check each parameter
+        if evaluation_type and params['evaluation_type'] != evaluation_type:
+            continue
         if shift_type and params['shift_type'] != shift_type:
             continue
         if distribution and params['distribution'] != distribution:
@@ -157,14 +164,30 @@ def load_results(experiment='slc', shift_type=None, distribution=None,
     matching_files.sort(key=lambda x: os.path.getmtime(x[0]), reverse=True)
     
     # Select file
-    if latest:
+    if timestamp:
+        # Find file with specific timestamp
+        target_file = None
+        for file_path, params in matching_files:
+            if params['timestamp'] == timestamp:
+                target_file = (file_path, params)
+                break
+        
+        if target_file is None:
+            print(f"No file found with timestamp: {timestamp}")
+            print("Available timestamps:")
+            for file_path, params in matching_files:
+                print(f"  - {params['timestamp']} ({os.path.basename(file_path)})")
+            return None
+        
+        file_path, params = target_file
+    elif latest:
         file_path, params = matching_files[0]
     else:
         file_path, params = matching_files[-1]
     
     filename = os.path.basename(file_path)
     print(f"Loading: {filename}")
-    print(f"Parameters: {params['shift_type']} {params['distribution']}, "
+    print(f"Parameters: {params['evaluation_type']} {params['shift_type']} {params['distribution']}, "
           f"α: {params['alpha_steps']} steps ({params['alpha_min']:.1f}-{params['alpha_max']:.1f}), "
           f"noise: {params['noise_steps']} steps ({params['noise_min']:.1f}-{params['noise_max']:.1f}), "
           f"trials: {params['trials']}, zero_mean: {params['zero_mean']}")
@@ -215,6 +238,81 @@ def load_zero_mean(experiment='slc'):
 def load_non_zero_mean(experiment='slc'):
     """Load results with non-zero mean contamination."""
     return load_results(experiment=experiment, zero_mean=False)
+
+def list_timestamps(experiment='slc', **kwargs):
+    """
+    List all available timestamps for a specific configuration.
+    
+    Args:
+        experiment (str): Experiment name
+        **kwargs: Any other parameters to filter by (shift_type, distribution, etc.)
+    
+    Returns:
+        list: List of available timestamps
+    """
+    # Find all files for the experiment
+    pattern = f"data/{experiment}/evaluation_results/*.csv"
+    files = glob.glob(pattern)
+    
+    if not files:
+        print(f"No files found for experiment: {experiment}")
+        return []
+    
+    # Filter files by parameters
+    matching_files = []
+    for file_path in files:
+        filename = os.path.basename(file_path)
+        params = parse_evaluation_filename(filename)
+        
+        if not params:
+            continue
+        
+        # Check each parameter
+        for key, value in kwargs.items():
+            if key in params and params[key] != value:
+                break
+        else:
+            matching_files.append((file_path, params))
+    
+    if not matching_files:
+        print(f"No files found matching the specified parameters")
+        return []
+    
+    # Sort by modification time
+    matching_files.sort(key=lambda x: os.path.getmtime(x[0]), reverse=True)
+    
+    print(f"Available timestamps for {experiment} with parameters: {kwargs}")
+    print("=" * 80)
+    
+    timestamps = []
+    for i, (file_path, params) in enumerate(matching_files):
+        timestamp = params['timestamp']
+        timestamps.append(timestamp)
+        mod_time = datetime.fromtimestamp(os.path.getmtime(file_path))
+        print(f"{i+1:2d}. {timestamp} - {mod_time.strftime('%Y-%m-%d %H:%M:%S')} - {os.path.basename(file_path)}")
+    
+    return timestamps
+
+# Empirical evaluation convenience functions
+def load_empirical_latest(experiment='slc'):
+    """Load the most recent empirical evaluation results for an experiment."""
+    return load_results(experiment=experiment, evaluation_type='empirical')
+
+def load_empirical_additive_gaussian(experiment='slc'):
+    """Load latest empirical additive gaussian results."""
+    return load_results(experiment=experiment, evaluation_type='empirical', shift_type='additive', distribution='gaussian')
+
+def load_empirical_multiplicative_gaussian(experiment='slc'):
+    """Load latest empirical multiplicative gaussian results."""
+    return load_results(experiment=experiment, evaluation_type='empirical', shift_type='multiplicative', distribution='gaussian')
+
+def load_empirical_exponential(experiment='slc'):
+    """Load latest empirical exponential distribution results."""
+    return load_results(experiment=experiment, evaluation_type='empirical', distribution='exponential')
+
+def load_empirical_student_t(experiment='slc'):
+    """Load latest empirical student-t distribution results."""
+    return load_results(experiment=experiment, evaluation_type='empirical', distribution='student-t')
 
 if __name__ == "__main__":
     print("=== Evaluation Results Browser ===")

@@ -1636,6 +1636,7 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
     epsilon = theta_hatL['radius'] if robust_L else 0
     delta = theta_hatH['radius'] if robust_H else 0
     method = 'erica' if robust_L or robust_H else 'enrico'
+    num_steps_min = 1 if method == 'enrico' else num_steps_min
     max_grad_norm = 1.0 if grad_clip else float('inf')
 
     mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H = get_initialization(
@@ -1648,7 +1649,7 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
 
     T = torch.randn(mu_H.shape[0], mu_L.shape[0], requires_grad=True, device=run_device)
     optimizer_T = torch.optim.Adam([T], lr=eta_min)
-    
+    #optimizer_T = torch.optim.Adam([T], lr=eta_min, eps=1e-8, amsgrad=True)
     monitor = TrainingMonitor()
     previous_objective = float('inf')
 
