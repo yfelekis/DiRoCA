@@ -37,6 +37,7 @@ warnings.filterwarnings('ignore')
 # Import local modules
 import utilities as ut
 import modularised_utils as mut
+import evaluation_utils as evut
 
 def apply_shift(clean_data, shift_config, all_var_names, model_level, seed=None):
     """
@@ -74,6 +75,14 @@ def apply_shift(clean_data, shift_config, all_var_names, model_level, seed=None)
         # Use the local generator
         noise_matrix = rng.exponential(scale=scale, size=(n_samples, n_dims))
     
+    elif dist_type == 'translation':
+        c = params.get('c', 0.5)
+        noise_matrix = np.ones((n_samples, n_dims)) * c
+    
+    elif dist_type == 'scaling':
+        c = params.get('c', 1.5)
+        noise_matrix = np.ones((n_samples, n_dims)) * c
+    
     final_noise = np.zeros_like(clean_data)
     vars_to_affect = params.get('apply_to_vars')
 
@@ -83,7 +92,12 @@ def apply_shift(clean_data, shift_config, all_var_names, model_level, seed=None)
         indices_to_affect = [all_var_names.index(var) for var in vars_to_affect if var in all_var_names]
         final_noise[:, indices_to_affect] = noise_matrix[:, indices_to_affect]
 
-    return clean_data + final_noise if shift_type == 'additive' else clean_data * final_noise
+    if shift_type == 'additive':
+        return clean_data + final_noise
+    elif shift_type == 'multiplicative':
+        return clean_data * final_noise
+    else:
+        raise ValueError(f"Unknown shift type: {shift_type}")
 
 def apply_huber_contamination(clean_data, alpha, shift_config, all_var_names, model_level, seed=None):
     """
@@ -114,34 +128,39 @@ def apply_huber_contamination(clean_data, alpha, shift_config, all_var_names, mo
 
 def calculate_empirical_error(T_matrix, Dll_test, Dhl_test, metric='fro'):
     """
-    Calculate empirical error between low-level and high-level data.
+    Calculates the abstraction error directly on the endogenous data samples
+    by computing a matrix norm between the transformed LL data and the HL data.
     
-    Parameters:
-    - T_matrix: transformation matrix
-    - Dll_test: low-level test data
-    - Dhl_test: high-level test data
-    - metric: error metric ('fro' for Frobenius norm)
-    
+    Args:
+        T_matrix (np.ndarray): The learned abstraction matrix.
+        Dll_test (np.ndarray): The low-level endogenous test samples.
+        Dhl_test (np.ndarray): The high-level endogenous test samples.
+        metric (str): The distance metric to use (e.g., 'fro', 'l1', 'nuclear').
+        
     Returns:
-    - error: float, the empirical error
+        float: The calculated empirical distance.
     """
+    if Dll_test.shape[0] == 0 or Dhl_test.shape[0] == 0:
+        return np.nan # Cannot compute error on empty data
+
     try:
-        # Apply transformation to low-level data
-        Dll_transformed = Dll_test @ T_matrix.T
+        # 1. Transform the low-level data samples using the learned T matrix
+        Dhl_predicted = Dll_test @ T_matrix.T
         
-        # Calculate error based on metric
-        if metric == 'fro':
-            error = np.mean((Dll_transformed - Dhl_test) ** 2)
-        else:
-            error = np.mean((Dll_transformed - Dhl_test) ** 2)
+        # 2. Compute the direct distance between the predicted and actual data matrices.
+        #    NOTE: We transpose the matrices here to match the expected input
+        #          of your original compute_empirical_distance function.
+        error = evut.compute_empirical_distance(Dhl_predicted.T, Dhl_test.T, metric)
         
-        return error
-    except:
+    except Exception as e:
+        print(f"  - Warning: Could not compute empirical distance. Error: {e}. Returning NaN.")
         return np.nan
+
+    return error
 
 def load_experiment_data(experiment='slc'):
     """
-    Load all necessary data for the evaluation.
+    Load all necessary data for the empirical evaluation.
     
     Parameters:
     - experiment: str, name of the experiment
@@ -163,16 +182,16 @@ def load_experiment_data(experiment='slc'):
     
     saved_folds = joblib.load(folds_path)
     
-    # Load results
-    results_path = f"{data_path}/results"
+    # Load empirical results
+    results_path = f"{data_path}/results_empirical"
     if not os.path.exists(results_path):
-        raise FileNotFoundError(f"Results directory not found at {results_path}")
+        raise FileNotFoundError(f"Empirical results directory not found at {results_path}")
     
-    # Try to load different result files
+    # Try to load different empirical result files
     results_to_evaluate = {}
     
-    # Load DIROCA results
-    diroca_path = f"{results_path}/diroca_cv_results.pkl"
+    # Load DIROCA empirical results
+    diroca_path = f"{results_path}/diroca_cv_results_empirical.pkl"
     if os.path.exists(diroca_path):
         diroca_results = joblib.load(diroca_path)
         if diroca_results:
@@ -187,20 +206,34 @@ def load_experiment_data(experiment='slc'):
                         new_diroca_dict[fold_key] = {run_id: fold_results[run_id]}
                 results_to_evaluate[method_name] = new_diroca_dict
     
-    # Load GradCA results
-    gradca_path = f"{results_path}/gradca_cv_results.pkl"
+    # Load GradCA empirical results
+    gradca_path = f"{results_path}/gradca_cv_results_empirical.pkl"
     if os.path.exists(gradca_path):
         gradca_results = joblib.load(gradca_path)
         results_to_evaluate['GradCA'] = gradca_results
     
-    # Load BARYCA results
-    baryca_path = f"{results_path}/baryca_cv_results.pkl"
+    # Load BARYCA empirical results
+    baryca_path = f"{results_path}/baryca_cv_results_empirical.pkl"
     if os.path.exists(baryca_path):
         baryca_results = joblib.load(baryca_path)
         results_to_evaluate['BARYCA'] = baryca_results
     
+    # Load Abs-LiNGAM empirical results
+    abslingam_path = f"{results_path}/abslingam_cv_results_empirical.pkl"
+    if os.path.exists(abslingam_path):
+        abslingam_results = joblib.load(abslingam_path)
+        if abslingam_results:
+            first_fold_key = list(abslingam_results.keys())[0]
+            for style in abslingam_results[first_fold_key].keys():
+                method_name = f"Abs-LiNGAM ({style})"
+                new_abslingam_dict = {}
+                for fold_key, fold_results in abslingam_results.items():
+                    if style in fold_results:
+                        new_abslingam_dict[fold_key] = {style: fold_results[style]}
+                results_to_evaluate[method_name] = new_abslingam_dict
+    
     if not results_to_evaluate:
-        raise FileNotFoundError(f"No result files found in {results_path}")
+        raise FileNotFoundError(f"No empirical result files found in {results_path}")
     
     # Load model data
     all_data = ut.load_all_data(experiment)
@@ -233,7 +266,7 @@ def run_evaluation(experiment='slc', alpha_values=None, noise_levels=None,
     - num_trials: int, number of trials per configuration
     - zero_mean: bool, whether to use zero mean for contamination
     - shift_type: str, type of shift ('additive' or 'multiplicative')
-    - distribution: str, distribution type ('gaussian', 'exponential', 'student-t')
+    - distribution: str, distribution type ('gaussian', 'exponential', 'student-t', 'translation', 'scaling')
     - output_file: str, filename to save results (optional, will be saved to data/{experiment}/evaluation_results/)
     
     Returns:
@@ -241,9 +274,9 @@ def run_evaluation(experiment='slc', alpha_values=None, noise_levels=None,
     """
     # Set default values if not provided
     if alpha_values is None:
-        alpha_values = np.linspace(0, 1.0, 5)
+        alpha_values = np.linspace(0, 1.0, 10)
     if noise_levels is None:
-        noise_levels = np.linspace(0, 10.0, 5)
+        noise_levels = np.linspace(0, 5.0, 20)
     
     # Load experiment data
     (saved_folds, results_to_evaluate, Dll_samples, Dhl_samples, 
@@ -296,13 +329,42 @@ def run_evaluation(experiment='slc', alpha_values=None, noise_levels=None,
                                 
                                 sigma_scale_L = base_sigma_L * (scale**2)
                                 sigma_scale_H = base_sigma_H * (scale**2)
-
-                                shift_config = {
-                                    'type': shift_type, 
-                                    'distribution': distribution,
-                                    'll_params': {'mu': mu_scale_L, 'sigma': sigma_scale_L},
-                                    'hl_params': {'mu': mu_scale_H, 'sigma': sigma_scale_H}
-                                }
+                                
+                                if distribution == 'gaussian':
+                                    shift_config = {
+                                        'type': shift_type, 
+                                        'distribution': distribution,
+                                        'll_params': {'mu': mu_scale_L, 'sigma': sigma_scale_L},
+                                        'hl_params': {'mu': mu_scale_H, 'sigma': sigma_scale_H}
+                                    }
+                                elif distribution == 'exponential':
+                                    shift_config = {
+                                        'type': shift_type, 
+                                        'distribution': distribution,
+                                        'll_params': {'scale': scale},
+                                        'hl_params': {'scale': scale}
+                                    }
+                                elif distribution == 'student-t':
+                                    shift_config = {
+                                        'type': shift_type, 
+                                        'distribution': distribution,
+                                        'll_params': {'df': 3, 'loc': np.zeros(base_sigma_L.shape[0]), 'shape': base_sigma_L * (scale**2)},
+                                        'hl_params': {'df': 3, 'loc': np.zeros(base_sigma_H.shape[0]), 'shape': base_sigma_H * (scale**2)}
+                                    }
+                                elif distribution == 'translation':
+                                    shift_config = {
+                                        'type': 'additive', 
+                                        'distribution': distribution,
+                                        'll_params': {'c': scale},
+                                        'hl_params': {'c': scale}
+                                    }
+                                elif distribution == 'scaling':
+                                    shift_config = {
+                                        'type': 'multiplicative', 
+                                        'distribution': distribution,
+                                        'll_params': {'c': scale},
+                                        'hl_params': {'c': scale}
+                                    }
                                 
                                 Dll_test_contaminated = apply_huber_contamination(
                                     Dll_test_clean, alpha, shift_config, ll_var_names, 'L', seed=trial)
@@ -366,16 +428,16 @@ def main():
                        help='Minimum alpha value (default: 0.0)')
     parser.add_argument('--alpha_max', type=float, default=1.0,
                        help='Maximum alpha value (default: 1.0)')
-    parser.add_argument('--alpha_steps', type=int, default=5,
-                       help='Number of alpha steps (default: 5)')
+    parser.add_argument('--alpha_steps', type=int, default=10,
+                       help='Number of alpha steps (default: 10)')
     
     # Noise parameters
     parser.add_argument('--noise_min', type=float, default=0.0,
                        help='Minimum noise level (default: 0.0)')
-    parser.add_argument('--noise_max', type=float, default=10.0,
-                       help='Maximum noise level (default: 10.0)')
-    parser.add_argument('--noise_steps', type=int, default=5,
-                       help='Number of noise steps (default: 5)')
+    parser.add_argument('--noise_max', type=float, default=5.0,
+                       help='Maximum noise level (default: 5.0)')
+    parser.add_argument('--noise_steps', type=int, default=20,
+                       help='Number of noise steps (default: 20)')
     
     # Trial parameters
     parser.add_argument('--trials', type=int, default=2,
@@ -388,7 +450,7 @@ def main():
                        choices=['additive', 'multiplicative'],
                        help='Type of shift (default: additive)')
     parser.add_argument('--distribution', type=str, default='gaussian',
-                       choices=['gaussian', 'exponential', 'student-t'],
+                       choices=['gaussian', 'exponential', 'student-t', 'translation', 'scaling'],
                        help='Distribution type (default: gaussian)')
     
     # Output
