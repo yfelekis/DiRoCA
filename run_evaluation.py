@@ -75,6 +75,14 @@ def apply_shift(clean_data, shift_config, all_var_names, model_level):
         scale        = params.get('scale', 1.0)
         noise_matrix = np.random.exponential(scale=scale, size=(n_samples, n_dims))
     
+    elif dist_type == 'translation':
+        c           = params.get('c', 0.5)
+        noise_matrix = np.ones((n_samples, n_dims)) * c
+    
+    elif dist_type == 'scaling':
+        c           = params.get('c', 1.5)
+        noise_matrix = np.ones((n_samples, n_dims)) * c
+    
     # --- 2. Apply noise selectively if specified ---
     final_noise = np.zeros_like(clean_data)
     vars_to_affect = params.get('apply_to_vars')
@@ -356,8 +364,22 @@ def run_evaluation(experiment='slc', alpha_values=None, noise_levels=None,
                                     shift_config = {
                                         'type': shift_type, 
                                         'distribution': distribution,
-                                        'll_params': {'df': 3, 'loc': 0, 'scale': scale},
-                                        'hl_params': {'df': 3, 'loc': 0, 'scale': scale}
+                                        'll_params': {'df': 3, 'loc': np.zeros(base_sigma_L.shape[0]), 'shape': base_sigma_L * (scale**2)},
+                                        'hl_params': {'df': 3, 'loc': np.zeros(base_sigma_H.shape[0]), 'shape': base_sigma_H * (scale**2)}
+                                    }
+                                elif distribution == 'translation':
+                                    shift_config = {
+                                        'type': 'additive', 
+                                        'distribution': distribution,
+                                        'll_params': {'c': scale},
+                                        'hl_params': {'c': scale}
+                                    }
+                                elif distribution == 'scaling':
+                                    shift_config = {
+                                        'type': 'multiplicative', 
+                                        'distribution': distribution,
+                                        'll_params': {'c': scale},
+                                        'hl_params': {'c': scale}
                                     }
                                 
                                 Dll_test_contaminated = apply_huber_contamination(
@@ -444,8 +466,10 @@ def main():
                        choices=['additive', 'multiplicative'],
                        help='Type of shift (default: additive)')
     parser.add_argument('--distribution', type=str, default='gaussian',
-                       choices=['gaussian', 'exponential', 'student-t'],
+                       choices=['gaussian', 'exponential', 'student-t', 'translation', 'scaling'],
                        help='Distribution type (default: gaussian)')
+    
+
     
     # Output
     parser.add_argument('--output', type=str, default=None,
