@@ -234,6 +234,20 @@ def print_distribution_summary(final_params, initial_params, name=""):
 def plot_marginal_distributions(final_params, initial_params, var_names, model_name=""):
     """Plots a comparison of the 1D marginals for each variable."""
     
+    # Set LaTeX font
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman"],
+        "font.size": 14,
+        "axes.titlesize": 16,
+        "axes.labelsize": 14,
+        "xtick.labelsize": 12,
+        "ytick.labelsize": 12,
+        "legend.fontsize": 12,
+        "figure.titlesize": 18
+    })
+    
     mu_final, sigma_final = final_params['mu_U'], final_params['Sigma_U']
     mu_initial, sigma_initial = initial_params['mu_U'], initial_params['Sigma_U']
     
@@ -241,23 +255,24 @@ def plot_marginal_distributions(final_params, initial_params, var_names, model_n
     n_cols = 3
     n_rows = (n_vars + n_cols - 1) // n_cols # Calculate rows needed
     
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(15, 4 * n_rows))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, 5 * n_rows))
     axes = axes.flatten()
-    fig.suptitle(f'Marginal Noise Distributions: {model_name}', fontsize=16)
+    fig.suptitle(f'Marginal Noise Distributions: {model_name}', fontsize=20)
 
     for i in range(n_vars):
         # Initial Distribution
         mean_i, std_i = mu_initial[i], np.sqrt(sigma_initial[i, i])
         x = np.linspace(mean_i - 3*std_i, mean_i + 3*std_i, 200)
-        axes[i].plot(x, norm.pdf(x, mean_i, std_i), 'b-', lw=2, label='Initial (Empirical)')
+        axes[i].plot(x, norm.pdf(x, mean_i, std_i), 'b-', lw=3, label='Initial (Empirical)')
 
         # Final (Worst-Case) Distribution
         mean_f, std_f = mu_final[i], np.sqrt(sigma_final[i, i])
         x = np.linspace(mean_f - 3*std_f, mean_f + 3*std_f, 200)
-        axes[i].plot(x, norm.pdf(x, mean_f, std_f), 'r--', lw=2, label='Final (Worst-Case)')
+        axes[i].plot(x, norm.pdf(x, mean_f, std_f), 'r--', lw=3, label='Final (Worst-Case)')
         
-        axes[i].set_title(var_names[i])
-        axes[i].legend()
+        axes[i].set_title(var_names[i], fontsize=18)
+        axes[i].legend(fontsize=14)
+        axes[i].tick_params(axis='both', which='major', labelsize=14)
 
     # Hide any unused subplots
     for j in range(n_vars, len(axes)):
