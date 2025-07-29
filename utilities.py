@@ -10,6 +10,9 @@ from scipy.stats import norm
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from IPython.display import HTML
+import evaluation_utils as evut
+import modularised_utils as mut
+
 
 def get_coefficients(data, G, return_noise=False, use_ridge=False, alpha=1.0):
     """
@@ -91,6 +94,80 @@ def compute_empirical_radius(N, eta, c1=1.0, c2=1.0, alpha=2.0, m=3):
 
     epsilon = (np.log(c1 / eta) / (c2 * N)) ** exponent
     return epsilon
+
+def calculate_abstraction_error(T_matrix, Dll_test, Dhl_test):
+    """
+    Calculates the abstraction error for a given T matrix on a test set.
+
+    This function works in the space of distribution parameters:
+    1. It estimates Gaussian parameters (mean, cov) from the LL and HL test samples.
+    2. It transforms the LL Gaussian's parameters using the T matrix.
+    3. It computes the Wasserstein distance between the transformed LL distribution
+       and the actual HL distribution.
+    
+    Args:
+        T_matrix (np.ndarray): The learned abstraction matrix.
+        Dll_test (np.ndarray): The low-level endogenous test samples.
+        Dhl_test (np.ndarray): The high-level endogenous test samples.
+        
+    Returns:
+        float: The calculated Wasserstein-2 distance.
+    """
+    # 1. Estimate parameters from the low-level test data
+    mu_L_test    = np.mean(Dll_test, axis=0)
+    Sigma_L_test = np.cov(Dll_test, rowvar=False)
+
+    # 2. Estimate parameters from the high-level test data
+    mu_H_test    = np.mean(Dhl_test, axis=0)
+    Sigma_H_test = np.cov(Dhl_test, rowvar=False)
+
+    # 3. Transform the low-level parameters using the T matrix
+    # This projects the low-level distribution into the high-level space
+    mu_V_predicted    = mu_L_test @ T_matrix.T
+    Sigma_V_predicted = T_matrix @ Sigma_L_test @ T_matrix.T
+    
+    # 4. Compute the Wasserstein distance between the two resulting Gaussians
+    try:
+        wasserstein_dist = np.sqrt(mut.compute_wasserstein(mu_V_predicted, Sigma_V_predicted, mu_H_test, Sigma_H_test))
+    except Exception as e:
+        print(f"  - Warning: Could not compute Wasserstein distance. Error: {e}. Returning NaN.")
+        return np.nan
+
+    return wasserstein_dist
+
+
+def calculate_empirical_error(T_matrix, Dll_test, Dhl_test, metric='fro'):
+    """
+    Calculates the abstraction error directly on the endogenous data samples
+    by computing a matrix norm between the transformed LL data and the HL data.
+    
+    Args:
+        T_matrix (np.ndarray): The learned abstraction matrix.
+        Dll_test (np.ndarray): The low-level endogenous test samples.
+        Dhl_test (np.ndarray): The high-level endogenous test samples.
+        metric (str): The distance metric to use (e.g., 'fro', 'l1', 'nuclear').
+        
+    Returns:
+        float: The calculated empirical distance.
+    """
+    if Dll_test.shape[0] == 0 or Dhl_test.shape[0] == 0:
+        return np.nan # Cannot compute error on empty data
+
+    try:
+        # 1. Transform the low-level data samples using the learned T matrix
+        Dhl_predicted = Dll_test @ T_matrix.T
+        
+        # 2. Compute the direct distance between the predicted and actual data matrices.
+        #    NOTE: We transpose the matrices here to match the expected input
+        #          of your original compute_empirical_distance function.
+        error = evut.compute_empirical_distance(Dhl_predicted.T, Dhl_test.T, metric)
+        
+    except Exception as e:
+        print(f"  - Warning: Could not compute empirical distance. Error: {e}. Returning NaN.")
+        return np.nan
+
+    return error
+
 
 def load_all_data(experiment_name):
     """Loads all model blueprints and abstraction data for a given experiment."""
