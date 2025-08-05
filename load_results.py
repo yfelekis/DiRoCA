@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive helper to load evaluation results by any parameter.
+Helper to load evaluation results.
 """
 
 import pandas as pd
@@ -194,50 +194,6 @@ def load_results(experiment='slc', evaluation_type=None, shift_type=None, distri
     
     return pd.read_csv(file_path)
 
-# Convenience functions
-def load_latest(experiment='slc'):
-    """Load the most recent results for an experiment."""
-    return load_results(experiment=experiment)
-
-def load_slc():
-    """Load latest SLC results."""
-    return load_latest('slc')
-
-def load_lilucas():
-    """Load latest LILUCAS results."""
-    return load_latest('lilucas')
-
-def load_additive_gaussian(experiment='slc'):
-    """Load latest additive gaussian results."""
-    return load_results(experiment=experiment, shift_type='additive', distribution='gaussian')
-
-def load_multiplicative_gaussian(experiment='slc'):
-    """Load latest multiplicative gaussian results."""
-    return load_results(experiment=experiment, shift_type='multiplicative', distribution='gaussian')
-
-def load_exponential(experiment='slc'):
-    """Load latest exponential distribution results."""
-    return load_results(experiment=experiment, distribution='exponential')
-
-def load_student_t(experiment='slc'):
-    """Load latest student-t distribution results."""
-    return load_results(experiment=experiment, distribution='student-t')
-
-def load_full_eval(experiment='slc'):
-    """Load results from a full evaluation (many steps/trials)."""
-    return load_results(experiment=experiment, alpha_steps=10, noise_steps=20, trials=20)
-
-def load_quick_eval(experiment='slc'):
-    """Load results from a quick evaluation (few steps/trials)."""
-    return load_results(experiment=experiment, alpha_steps=3, noise_steps=4, trials=2)
-
-def load_zero_mean(experiment='slc'):
-    """Load results with zero mean contamination."""
-    return load_results(experiment=experiment, zero_mean=True)
-
-def load_non_zero_mean(experiment='slc'):
-    """Load results with non-zero mean contamination."""
-    return load_results(experiment=experiment, zero_mean=False)
 
 def list_timestamps(experiment='slc', **kwargs):
     """
@@ -292,27 +248,6 @@ def list_timestamps(experiment='slc', **kwargs):
         print(f"{i+1:2d}. {timestamp} - {mod_time.strftime('%Y-%m-%d %H:%M:%S')} - {os.path.basename(file_path)}")
     
     return timestamps
-
-# Empirical evaluation convenience functions
-def load_empirical_latest(experiment='slc'):
-    """Load the most recent empirical evaluation results for an experiment."""
-    return load_results(experiment=experiment, evaluation_type='empirical')
-
-def load_empirical_additive_gaussian(experiment='slc'):
-    """Load latest empirical additive gaussian results."""
-    return load_results(experiment=experiment, evaluation_type='empirical', shift_type='additive', distribution='gaussian')
-
-def load_empirical_multiplicative_gaussian(experiment='slc'):
-    """Load latest empirical multiplicative gaussian results."""
-    return load_results(experiment=experiment, evaluation_type='empirical', shift_type='multiplicative', distribution='gaussian')
-
-def load_empirical_exponential(experiment='slc'):
-    """Load latest empirical exponential distribution results."""
-    return load_results(experiment=experiment, evaluation_type='empirical', distribution='exponential')
-
-def load_empirical_student_t(experiment='slc'):
-    """Load latest empirical student-t distribution results."""
-    return load_results(experiment=experiment, evaluation_type='empirical', distribution='student-t')
 
 if __name__ == "__main__":
     print("=== Evaluation Results Browser ===")

@@ -12,15 +12,12 @@ num_steps_min: 5
 num_steps_max: 2
 tol: 0.0001
 
-# K-Fold Cross-Validation settings
 k_folds: 5
 
-# --- ADD/UPDATE THESE PARAMETERS ---
-seed: 23 # 42             # For all random operations, including KFold
+seed: 23              
 plot_steps: false
 plot_epochs: false
 display_results: false
-# --- END OF ADDED PARAMETERS ---
 
 # Method flags
 xavier: false

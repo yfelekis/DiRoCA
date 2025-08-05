@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """
-Evaluation Script for DiRoCA TBS
+GaussianEvaluation Script
 
-This script runs the evaluation block from the gauss_evaluation.ipynb notebook
-with configurable parameters that can be set via command line arguments.
 
 Usage:
     python run_evaluation.py [--experiment EXPERIMENT] [--alpha_min ALPHA_MIN] [--alpha_max ALPHA_MAX] 
@@ -100,7 +98,7 @@ def apply_shift(clean_data, shift_config, all_var_names, model_level):
             final_noise[:, indices_to_affect] = noise_matrix[:, indices_to_affect]
         except ValueError as e:
             print(f"Warning: A variable in 'apply_to_vars' not found. Error: {e}")
-            return clean_data # Return clean data if there's a config error
+            return clean_data 
 
     # --- 3. Return the contaminated data ---
     if shift_type == 'additive':
@@ -125,7 +123,6 @@ def apply_huber_contamination(clean_data, alpha, shift_config, all_var_names, mo
     Returns:
         np.ndarray: The new, contaminated test data.
     """
-    #np.random.seed(seed)
     if not (0 <= alpha <= 1):
         raise ValueError("Alpha must be between 0 and 1.")
 
@@ -221,7 +218,6 @@ def load_experiment_data(experiment='slc'):
     if not os.path.exists(results_path):
         raise FileNotFoundError(f"Results directory not found at {results_path}")
     
-    # Try to load different result files
     results_to_evaluate = {}
     
     # Load DIROCA results

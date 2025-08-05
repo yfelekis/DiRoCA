@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """
-Empirical Evaluation Script for DiRoCA TBS
+Empirical Evaluation
 
-This script runs the evaluation block from the empirical_evaluation.ipynb notebook
-with configurable parameters that can be set via command line arguments.
 
 Usage:
     python run_empirical_evaluation.py [--experiment EXPERIMENT] [--alpha_min ALPHA_MIN] [--alpha_max ALPHA_MAX] 
@@ -44,7 +42,6 @@ def apply_shift(clean_data, shift_config, all_var_names, model_level, seed=None)
     Applies a specified contamination, using a dedicated random generator
     for reproducibility.
     """
-    # Create a local random number generator from the seed
     rng = np.random.default_rng(seed)
     
     shift_type = shift_config.get('type')
@@ -108,7 +105,6 @@ def apply_huber_contamination(clean_data, alpha, shift_config, all_var_names, mo
     if alpha == 0:
         return clean_data
     
-    # Pass the seed down to the noise generation function
     noisy_data = apply_shift(clean_data, shift_config, all_var_names, model_level, seed=seed)
     
     if alpha == 1:
@@ -117,7 +113,6 @@ def apply_huber_contamination(clean_data, alpha, shift_config, all_var_names, mo
     n_samples = clean_data.shape[0]
     n_to_contaminate = int(alpha * n_samples)
     
-    # Use a local generator to select which rows to replace
     rng = np.random.default_rng(seed)
     indices_to_replace = rng.choice(n_samples, n_to_contaminate, replace=False)
     
@@ -147,9 +142,7 @@ def calculate_empirical_error(T_matrix, Dll_test, Dhl_test, metric='fro'):
         # 1. Transform the low-level data samples using the learned T matrix
         Dhl_predicted = Dll_test @ T_matrix.T
         
-        # 2. Compute the direct distance between the predicted and actual data matrices.
-        #    NOTE: We transpose the matrices here to match the expected input
-        #          of your original compute_empirical_distance function.
+        # 2. Compute the distance between the predicted and actual data matrices.
         error = evut.compute_empirical_distance(Dhl_predicted.T, Dhl_test.T, metric)
         
     except Exception as e:
@@ -187,7 +180,6 @@ def load_experiment_data(experiment='slc'):
     if not os.path.exists(results_path):
         raise FileNotFoundError(f"Empirical results directory not found at {results_path}")
     
-    # Try to load different empirical result files
     results_to_evaluate = {}
     
     # Load DIROCA empirical results

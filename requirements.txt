@@ -1,8 +1,37 @@
+# Core scientific computing
+numpy>=1.24.0
+scipy>=1.10.0
+pandas>=1.5.0
+
+# Machine learning and optimization
+scikit-learn>=1.3.0
 torch>=2.1.0
 torchvision>=0.16.0
-numpy>=1.24.0
-networkx>=3.2.0
 joblib>=1.3.0
+
+# Network and graph analysis
+networkx>=3.2.0
+
+# Bayesian networks and causal inference
+pgmpy>=0.1.20
+
+# Optimization and transport
+ot>=0.8.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.15.0
+
+# Progress bars and utilities
 tqdm>=4.66.0
-scikit-learn>=1.3.0
+
+# Configuration and data handling
 pyyaml>=6.0
+
+# Jupyter notebook support
+ipython>=8.0.0
+jupyter>=1.0.0
+
+# Additional utilities
+pathlib2>=2.3.0

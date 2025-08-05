@@ -83,7 +83,6 @@ abstraction:
     iota6: 'eta6'
     iota7: 'eta9'
     iota8: 'eta10'
-    # Note: iota9 is not in the notebook's omega map, so it's omitted here.
     iota10: 'eta5'
     iota11: 'eta6'
     iota12: 'eta3'

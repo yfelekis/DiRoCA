@@ -7,7 +7,6 @@ num_hlsamples: 10000
 
 # Low-Level (LL) Model Definition
 low_level_model:
-  # NOTE: Variable names must be valid Python identifiers (no spaces)
   variables: ['Smoking', 'Genetics', 'Lung_Cancer', 'Allergy', 'Coughing', 'Fatigue']
 
   # The graph structure must be defined explicitly for non-linear models

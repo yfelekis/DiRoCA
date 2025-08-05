@@ -44,7 +44,6 @@ def get_coefficients(data, G, return_noise=False, use_ridge=False, alpha=1.0):
         for parent, coef in zip(parents, model.coef_):
             coeffs[(parent, node)] = coef
             
-        # OVERWRITE the noise for this node with the residuals
         # Residuals = y - y_predicted
         y_pred = model.predict(X)
         noise[:, node_idx] = y - y_pred
@@ -157,9 +156,7 @@ def calculate_empirical_error(T_matrix, Dll_test, Dhl_test, metric='fro'):
         # 1. Transform the low-level data samples using the learned T matrix
         Dhl_predicted = Dll_test @ T_matrix.T
         
-        # 2. Compute the direct distance between the predicted and actual data matrices.
-        #    NOTE: We transpose the matrices here to match the expected input
-        #          of your original compute_empirical_distance function.
+        # 2. Compute the distance between the predicted and actual data matrices.
         error = evut.compute_empirical_distance(Dhl_predicted.T, Dhl_test.T, metric)
         
     except Exception as e:
@@ -239,11 +236,10 @@ def assemble_barycentric_parameters(fold_info, all_data, baryca_hyperparams):
     
     # 3. Calculate fold-specific radius
     train_n  = len(fold_info['train'])
-    # Assuming 'ut' is your imported utilities module
     ll_bound = round(compute_radius_lb(N=train_n, eta=0.05, c=1000), 3)
     hl_bound = round(compute_radius_lb(N=train_n, eta=0.05, c=1000), 3)
 
-    # 4. Add the theta parameters (note the key is 'theta_L', not 'theta_hatL')
+    # 4. Add the theta parameters
     opt_args['theta_L'] = {
         'mu_U': all_data['LLmodel']['noise_dist']['mu'], 
         'Sigma_U': all_data['LLmodel']['noise_dist']['sigma'], 
@@ -300,7 +296,6 @@ def print_distribution_summary(final_params, initial_params, name=""):
     print(f"  - Initial: {np.round(np.diag(sigma_initial), 3)}")
     print(f"  - Final  : {np.round(np.diag(sigma_final), 3)}")
     
-    # Show the final correlation matrix to see if the adversary induced correlations
     std_devs = np.sqrt(np.diag(sigma_final))
     # Add a small epsilon to avoid division by zero if variance is zero
     corr_matrix = sigma_final / np.outer(std_devs + 1e-8, std_devs + 1e-8)

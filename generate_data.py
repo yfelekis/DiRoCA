@@ -3,7 +3,6 @@ import os
 import joblib
 import numpy as np
 import yaml
-# Import the new NonlinearAddSCM class as well
 from models import LinearAddSCM, NonlinearAddSCM, CausalBayesianNetwork, Intervention
 import utilities as ut
 
@@ -33,7 +32,6 @@ def generate_and_save(config):
     ll_mu_hat = np.array(ll_config['noise_params']['mu'])
     ll_Sigma_hat = np.diag(ll_config['noise_params']['sigma_diag'])
 
-    # BRANCH for Linear Models
     if model_type == 'linear_anm':
         ll_coeffs_list = ll_config['coefficients']
         ll_endogenous_coeff_dict = {tuple(item[0]): item[1] for item in ll_coeffs_list}
@@ -55,7 +53,6 @@ def generate_and_save(config):
         print("✓ Linear low-level sampling complete.")
 
 
-    # BRANCH for Non-Linear Models (NEW)
     elif model_type == 'continuous_nonlinear_anm':
         # For non-linear models, the graph structure must be defined explicitly
         ll_causal_graph = CausalBayesianNetwork(ll_config['graph_edges'])
@@ -84,8 +81,7 @@ def generate_and_save(config):
     else:
         raise ValueError(f"Unknown model_type in config: {model_type}")
 
-    # --- 3. Abstraction & High-Level Model Inference (SHARED LOGIC) ---
-    # This logic runs for BOTH model types, as it only needs the generated data.
+    # --- 3. Abstraction & High-Level Model Inference ---
     hl_initial_coeff_dict = {tuple(item[0]): item[1] for item in hl_config['initial_coefficients']}
     hl_causal_graph = CausalBayesianNetwork(list(hl_initial_coeff_dict.keys()))
     
@@ -107,7 +103,7 @@ def generate_and_save(config):
     hl_Sigma_hat = np.diag(np.var(U_hl, axis=0))
     print("✓ High-level model inferred.")
 
-    # --- 4. High-Level Sampling (SHARED LOGIC) ---
+    # --- 4. High-Level Sampling ---
     Dhl_samples, Dhl_noise = {}, {}
     for eta in Ihl_relevant:
         if eta is not None:
@@ -119,7 +115,7 @@ def generate_and_save(config):
             Dhl_samples[eta] = data_observational_hl
     print("✓ High-level sampling complete.")
 
-    # --- 5. Save the Data (SHARED LOGIC) ---
+    # --- 5. Save the Data ---
     if model_type == 'linear_anm':
         LLmodels = {iota: LinearAddSCM(ll_causal_graph, ll_endogenous_coeff_dict, iota) for iota in Ill_relevant}
         HLmodels = {eta: LinearAddSCM(hl_causal_graph, hl_endogenous_coeff_dict, eta) for eta in Ihl_relevant}

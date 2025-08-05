@@ -10,13 +10,11 @@ num_steps_min: 5
 num_steps_max: 2
 tol: 0.0001
 
-# K-Fold Cross-Validation settings
 k_folds: 5
 
-# Seed and initialization
-seed: 23 # 42
+seed: 23 
 initialization: 'random'
 
-# Method flags - This disables the robust part of the optimization
+# Method flags 
 robust_L: false 
 robust_H: false

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Gaussian Optimization Script
-Converts the gauss_optimization.ipynb notebook into a command-line runnable script.
 """
 
 import argparse

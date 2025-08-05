@@ -24,22 +24,6 @@ class CausalBayesianNetwork(BayesianNetwork):
                 model_copy.remove_edges_from(in_edges)
         return model_copy
 
-# class Intervention:
-#     """
-#     Represents an intervention in a causal model.
-#     """
-#     def __init__(self, intervention_dict):
-#         if not isinstance(intervention_dict, dict):
-#             raise TypeError("Intervention must be a dictionary.")
-#         self.intervention = intervention_dict
-    
-#     def __repr__(self):
-#         return f"Intervention({self.intervention})"
-    
-#     def vv(self):
-#         """Returns the intervention dictionary."""
-#         return self.intervention
-
 class Intervention:
     
     def __init__(self, intervention):

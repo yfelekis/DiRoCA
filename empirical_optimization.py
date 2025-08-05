@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Empirical Optimization Script
-Converts the empirical_optimization.ipynb notebook into a command-line runnable script.
 """
 
 import argparse
@@ -83,7 +82,7 @@ def run_diroca_empirical_optimization(all_data, saved_folds, U_ll_hat, U_hl_hat,
         
         # Define the list of (epsilon, delta) pairs to search over
         radius_pairs_to_test = [
-            (ll_bound, hl_bound), # The specific theoretical case
+            (ll_bound, hl_bound), # The theoretical lower bound
             (1.0, 1.0),
             (2.0, 2.0),
             (4.0, 4.0),
