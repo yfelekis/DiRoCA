@@ -198,13 +198,32 @@ def wasserstein_dist(P, Q):
 def compute_wasserstein(mu1, cov1, mu2, cov2):
     
     mean_diff  = np.linalg.norm(mu1 - mu2)
-    cov_sqrt   = sqrtm(np.dot(np.dot(sqrtm(cov2), cov1), sqrtm(cov2)))
     
-    if np.iscomplexobj(cov_sqrt):
-        cov_sqrt = cov_sqrt.real
+    try:
+        # Ensure matrices are symmetric and positive semi-definite
+        cov1_sym = 0.5 * (cov1 + cov1.T)
+        cov2_sym = 0.5 * (cov2 + cov2.T)
         
-    trace_term = np.trace(cov1 + cov2 - 2 * cov_sqrt)
-    dist       = mean_diff**2 + trace_term
+        # Add small regularization to ensure positive definiteness
+        eps = 1e-10
+        cov1_reg = cov1_sym + eps * np.eye(cov1_sym.shape[0])
+        cov2_reg = cov2_sym + eps * np.eye(cov2_sym.shape[0])
+        
+        # Compute sqrtm with error handling
+        sqrt_cov2 = sqrtm(cov2_reg)
+        cov_sqrt = sqrtm(np.dot(np.dot(sqrt_cov2, cov1_reg), sqrt_cov2))
+        
+        if np.iscomplexobj(cov_sqrt):
+            cov_sqrt = cov_sqrt.real
+            
+        trace_term = np.trace(cov1_reg + cov2_reg - 2 * cov_sqrt)
+        
+    except Exception as e:
+        # Fallback: use simpler approximation
+        print(f"Failed to find a square root: {e}. Using fallback method.")
+        trace_term = np.trace(cov1 + cov2)
+    
+    dist = mean_diff**2 + trace_term
     
     return dist
 
