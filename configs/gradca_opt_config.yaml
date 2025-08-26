@@ -8,7 +8,7 @@ lambda_param_H: 0.1
 eta_max: 0.001
 eta_min: 0.001
 max_iter: 3000
-num_steps_min: 5
+num_steps_min: 1
 num_steps_max: 2
 tol: 0.0001
 

@@ -1293,7 +1293,11 @@ def optimize_min(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
     torch.manual_seed(seed)
     Ill = list(LLmodels.keys())
     if xavier:
-        T = torch.nn.init.xavier_normal_(T, gain=0.01)
+        #T = torch.nn.init.xavier_normal_(T, gain=0.1)
+        T0 = torch.eye(T.shape[0], T.shape[1])
+        T = T + 1e-3 * torch.randn_like(T0)
+        #T = torch.nn.init.orthogonal_(T, gain=0.1)
+        # T = torch.nn.init.xavier_normal_(T, gain=0.01) for slc gaussian
 
     for step in range(num_steps_min):
         objective_iota = torch.tensor(0.0, device=T.device)
@@ -1319,7 +1323,7 @@ def optimize_min(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
             return T.detach().clone().requires_grad_(True), objective_T_step, True
 
         optimizer_T.zero_grad()
-        objective_T_step.backward(retain_graph=True)
+        objective_T_step.backward(retain_graph=True) 
 
         if max_grad_norm < float('inf'):
             torch.nn.utils.clip_grad_norm_([T], max_grad_norm)
@@ -1471,7 +1475,11 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
             delta_obj=delta_objective, cond_num=condition_num, delta_T=delta_T_norm,
             mu_L=mu_L, sigma_L=Sigma_L, mu_H=mu_H, sigma_H=Sigma_H)
         
-        if delta_objective < tol:
+        # if delta_objective < tol:
+        #     print(f"Convergence reached at epoch {epoch+1}")
+        #     break
+
+        if (epoch + 1) >= 50 and delta_objective < tol:
             print(f"Convergence reached at epoch {epoch+1}")
             break
         
