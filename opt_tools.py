@@ -1196,13 +1196,18 @@ def init_in_frobenius_ball(shape, epsilon):
     return nn.Parameter(matrix)  # This ensures requires_grad=True
 
 def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilon, delta, eta_min, eta_max,
-                                    num_steps_min, num_steps_max, max_iter, tol, seed, robust_L, robust_H, initialization, experiment):
+                                    num_steps_min, num_steps_max, max_iter, tol, seed, robust_L, robust_H, initialization, experiment,eps,wd):
     
+    ###
+    # REMOVE EPS AND WD !!!!!!!!
+    # eps = 1e-6
+    # wd  = 1e-4
+    ###
     torch.manual_seed(seed)
     Ill = list(L_models.keys())
 
-    method  = 'erica' if robust_L or robust_H else 'enrico'
-    num_steps_min = 1 if method == 'enrico' else num_steps_min
+    method  = 'erica' if robust_L or robust_H else 'enrico'        
+    #num_steps_min = 1 if method == 'enrico' else num_steps_min
 
     # Convert inputs to torch tensors
     U_L = torch.as_tensor(U_L, dtype=torch.float32)
@@ -1211,9 +1216,10 @@ def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilo
     # Get dimensions
     N, l = U_L.shape
     _, h = U_H.shape
-    
+
     # Initialize variables
-    T     = torch.randn(h, l, requires_grad=True)
+    T     = torch.randn(h, l, requires_grad=True) 
+
     if initialization == 'random':
         Theta = torch.randn(N, l, requires_grad=True)
         Phi   = torch.randn(N, h, requires_grad=True)
@@ -1224,7 +1230,13 @@ def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilo
 
     
     # Create optimizers
-    optimizer_T   = torch.optim.Adam([T], lr=eta_min)
+    #optimizer_T   = torch.optim.Adam([T], lr=eta_min)
+    #optimizer_T = torch.optim.Adam([T], lr=eta_min, betas=(0.8, 0.95), eps=1e-6)
+    #optimizer_T = torch.optim.Adam([T], lr=6.5e-4, betas=(0.8, 0.95), eps=1e-6)
+    optimizer_T = torch.optim.AdamW([T], lr=eta_min, betas=(0.8, 0.95), eps=eps, weight_decay=wd)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_T, T_max=2000)
+
+
     optimizer_max = torch.optim.Adam([Theta, Phi], lr=eta_max)
     
     prev_T_objective = float('inf')
@@ -1239,6 +1251,7 @@ def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilo
             objs_T.append(T_objective.item())
             T_objective.backward()
             optimizer_T.step()
+            scheduler.step()
         #plot_progress(objs_T, 'T')
         # Step 2: Maximize with respect to Theta and Phi
         if method == 'erica':

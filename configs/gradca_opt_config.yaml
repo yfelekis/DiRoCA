@@ -5,24 +5,25 @@ lambda_param_L: 0.2
 lambda_param_H: 0.1
 
 # Optimization parameters
-eta_max: 0.001
+eta_max: 0.001 #SLC(G) = 0.001, LUC(G) = 0.0007
 eta_min: 0.001
-max_iter: 3000
+max_iter: 3000 #SLC(G) = 100000, LUC(G) = 1000
 num_steps_min: 1
 num_steps_max: 2
-tol: 0.0001
+tol: 0.0001 #SLC(G) = 1e-7, LUC(G) = 2e-5
 
 k_folds: 5
 
-seed: 23              
+seed: 23  #SLC(G) = 23, LUC(G) = 0             
 plot_steps: false
 plot_epochs: false
 display_results: false
 
 # Method flags
-xavier: false
+xavier: false #SLC(G) = True, LUC(G) = False
 project_onto_gelbrich: true
 proximal_grad: true
 grad_clip: true
 robust_L: false
 robust_H: false
+
