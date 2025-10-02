@@ -4,7 +4,6 @@ import time
 import os
 import ot
 
-
 import networkx as nx
 from tqdm import tqdm
 import joblib
@@ -170,161 +169,6 @@ def constraints_error_check(satisfied_L, d_L, e, satisfied_H, d_H, d):
         print(f"Warning: Constraints not satisfied for mu_H and Sigma_H! Distance: {d_H} and delta = {d}")
 
     return
-
-def plot_inner_loop_objectives(inner_loop_objectives, epoch, erica=True):
-    """
-    Plot objectives from the inner loop optimization steps for a given epoch.
-    
-    Args:
-        inner_loop_objectives: Dictionary containing 'min_objectives' and optionally 'max_objectives'
-        epoch: Current epoch number
-        erica: Boolean indicating if both min and max objectives should be plotted
-    """
-    sns.set_style("whitegrid")
-    
-    # inner_loop_objectives['min_objectives'] = np.array([t.detach().numpy() for t in inner_loop_objectives['min_objectives']])
-    # inner_loop_objectives['max_objectives'] = np.array([t.detach().numpy() for t in inner_loop_objectives['max_objectives']])
-
-    # Convert min objectives to numpy, handling both tensor and float types
-    min_objectives = []
-    for obj in inner_loop_objectives['min_objectives']:
-        if torch.is_tensor(obj):
-            min_objectives.append(obj.detach().numpy())
-        else:
-            min_objectives.append(obj)
-    inner_loop_objectives['min_objectives'] = np.array(min_objectives)
-    
-    # Convert max objectives to numpy, handling both tensor and float types
-    max_objectives = []
-    for obj in inner_loop_objectives['max_objectives']:
-        if torch.is_tensor(obj):
-            max_objectives.append(obj.detach().numpy())
-        else:
-            max_objectives.append(obj)
-    inner_loop_objectives['max_objectives'] = np.array(max_objectives)
-
-    plt.figure(figsize=(10, 6))
-    if erica:
-        # Create figure with two subplots
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
-        
-        # Plot minimization objectives
-        steps = range(1, len(inner_loop_objectives['min_objectives']) + 1)
-        sns.lineplot(
-            x=steps,
-            y=inner_loop_objectives['min_objectives'],
-            color='green',
-            ax=ax1
-        )
-        ax1.set_title(f'Minimization Steps (Epoch {epoch+1})')
-        ax1.set_xlabel('Step')
-        ax1.set_ylabel('Objective T Value')
-        
-        # Plot maximization objectives
-        if 'max_objectives' in inner_loop_objectives:
-            steps_max = range(1, len(inner_loop_objectives['max_objectives']) + 1)
-            sns.lineplot(
-                x=steps_max,
-                y=inner_loop_objectives['max_objectives'],
-                color='purple',
-                ax=ax2
-            )
-            ax2.set_title(f'Maximization Steps (Epoch {epoch+1})')
-            ax2.set_xlabel('Step')
-            ax2.set_ylabel('Objective θ Value')
-    else:
-        # Single plot for minimization only
-        plt.figure(figsize=(8, 5))
-        steps = range(1, len(inner_loop_objectives['min_objectives']) + 1)
-        sns.lineplot(
-            x=steps,
-            y=inner_loop_objectives['min_objectives'],
-            color='green'
-        )
-        plt.title(f'Optimization Progress - Epoch {epoch+1}')
-        plt.xlabel('Step')
-        plt.ylabel('Objective T Value')
-    
-    plt.tight_layout()
-    plt.show()
-
-def plot_epoch_objectives(epoch_objectives, erica=True):
-    """
-    Plot overall optimization progress across epochs.
-    
-    Args:
-        epoch_objectives: Dictionary containing 'T_objectives_overall' and optionally 'theta_objectives_overall'
-        erica: Boolean indicating if both T and theta objectives should be plotted
-    """
-    sns.set_style("whitegrid")
-    
-    epoch_objectives['T_objectives_overall'] = np.array([t.detach().numpy() for t in epoch_objectives['T_objectives_overall']])
-    epoch_objectives['theta_objectives_overall'] = np.array([t.detach().numpy() for t in epoch_objectives['theta_objectives_overall']])
-
-    if erica:
-        # Create figure with two subplots vertically stacked
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
-        
-        # Plot T objectives
-        epochs = range(1, len(epoch_objectives['T_objectives_overall']) + 1)
-        sns.lineplot(
-            x=epochs,
-            y=epoch_objectives['T_objectives_overall'],
-            color='green',
-            ax=ax1
-        )
-        ax1.set_title('T Objective across Epochs')
-        ax1.set_xlabel('Epoch')
-        ax1.set_ylabel('T Objective Value')
-        
-        # Plot theta objectives
-        if 'theta_objectives_overall' in epoch_objectives:
-            sns.lineplot(
-                x=epochs,
-                y=epoch_objectives['theta_objectives_overall'],
-                color='purple',
-                ax=ax2
-            )
-            ax2.set_title('θ Objective across Epochs')
-            ax2.set_xlabel('Epoch')
-            ax2.set_ylabel('θ Objective Value')
-    else:
-        # Single plot for T objectives only
-        plt.figure(figsize=(8, 5))
-        epochs = range(1, len(epoch_objectives['T_objectives_overall']) + 1)
-        sns.lineplot(
-            x=epochs,
-            y=epoch_objectives['T_objectives_overall'],
-            color='green'
-        )
-        plt.title('Overall Optimization Progress')
-        plt.xlabel('Epoch')
-        plt.ylabel('T Objective Value')
-    
-    plt.tight_layout()
-    plt.show()
-
-def print_results(T, paramsL, paramsH, elapsed_time):
-    print("\n" + "="*50)
-    print("OPTIMIZATION RESULTS".center(50))
-    print("="*50 + "\n")
-
-    print("Final Transformation Matrix T:")
-    print("-"*30)
-    print(np.array2string(T, precision=4, suppress_small=True))
-    print(f"\nCondition Number: {evut.condition_number(T):.4f}")
-    
-    print("\nLow-Level Parameters:")
-    print("-"*30)
-    print(f"μ_L = {np.array2string(paramsL['mu_U'], precision=4, suppress_small=True)}")
-    print(f"Σ_L = \n{np.array2string(paramsL['Sigma_U'], precision=4, suppress_small=True)}")
-    
-    print("\nHigh-Level Parameters:")
-    print("-"*30)
-    print(f"μ_H = {np.array2string(paramsH['mu_U'], precision=4, suppress_small=True)}")
-    print(f"Σ_H = \n{np.array2string(paramsH['Sigma_U'], precision=4, suppress_small=True)}")
-
-    print(f"\nOptimization time: {elapsed_time:.4f} seconds")
 
 def project_onto_gelbrich_ball(mu_in, Sigma_in, hat_mu, hat_Sigma, epsilon, max_iter=100, tol=1e-4):
     """
@@ -612,36 +456,6 @@ def pca_projection(Sigma, target_dim):
     Sigma_projected = torch.matmul(torch.matmul(V.T, Sigma), V)  # k×k matrix
     
     return Sigma_projected, V
-
-# SVD Projection from higher to lower dimension
-def svd_projection(Sigma, target_dim):
-    """
-    Project a d×d matrix to a k×k matrix where k < d using SVD
-    Args:
-        Sigma: source matrix (d×d)
-        target_dim: target dimension k
-    Returns:
-        k×k projected matrix
-    """
-    # Perform SVD
-    U, S, V = torch.svd(Sigma)
-    
-    # Take only the first target_dim components
-    U_k = U[:, :target_dim]  # d×k matrix
-    S_k = S[:target_dim]     # k singular values
-    
-    # Project the covariance matrix
-    Sigma_projected = torch.matmul(torch.matmul(U_k.T, Sigma), U_k)  # k×k matrix
-    
-    return Sigma_projected, U_k
-
-def project_covariance(Sigma, n, method):
-    if method == 'pca':
-        return pca_projection(Sigma, n)
-    elif method == 'svd':
-        return svd_projection(Sigma, n)
-    else:
-        raise ValueError(f"Unknown projection method: {method}")
     
 def compute_struc_matrices(models, I):
     matrices = []
@@ -771,7 +585,7 @@ def auto_bary_optim(theta_baryL, theta_baryH, max_iter, tol, seed):
 
     return T  # Return final objective and optimized T
 
-def barycentric_optimization(theta_L, theta_H, LLmodels, HLmodels, Ill, Ihl, projection_method, initialization, autograd, seed, max_iter, tol, display_results):
+def barycentric_optimization(theta_L, theta_H, LLmodels, HLmodels, Ill, Ihl, initialization, seed, max_iter, tol):
 
     # Start timing
     start_time = time.time()
@@ -794,26 +608,14 @@ def barycentric_optimization(theta_L, theta_H, LLmodels, HLmodels, Ill, Ihl, pro
     Sigma_bary_L = compute_Sigma_bary(L_matrices, Sigma_L, initialization, max_iter, tol)
     Sigma_bary_H = compute_Sigma_bary(H_matrices, Sigma_H, initialization, max_iter, tol)
     
-    proj_Sigma_bary_L, Tp = project_covariance(Sigma_bary_L, h, projection_method)
+    proj_Sigma_bary_L, Tp = pca_projection(Sigma_bary_L, h) 
     proj_mu_bary_L        = torch.matmul(Tp.T, mu_bary_L)
 
     paramsL = {'mu_U': mu_bary_L.detach().numpy(), 'Sigma_U': Sigma_bary_L.detach().numpy(), 'radius': epsilon}
     paramsH = {'mu_U': mu_bary_H.detach().numpy(), 'Sigma_U': Sigma_bary_H.detach().numpy(), 'radius': delta}
 
-    if autograd == True:
-        params_bary_autograd = {
-                                'theta_baryL': paramsL,
-                                'theta_baryH': paramsH,
-                                'max_iter': 10,
-                                'tol': 1e-5,
-                                'seed': seed
-                               }
-        
-        T = auto_bary_optim(**params_bary_autograd)
-
-    else:
-        tau, A = monge(proj_mu_bary_L, proj_Sigma_bary_L, mu_bary_H, Sigma_bary_H)
-        T = torch.matmul(A, Tp.T)
+    tau, A = monge(proj_mu_bary_L, proj_Sigma_bary_L, mu_bary_H, Sigma_bary_H)
+    T = torch.matmul(A, Tp.T)
 
     T  = T.detach().numpy()
     Tp = Tp.detach().numpy()
@@ -822,10 +624,6 @@ def barycentric_optimization(theta_L, theta_H, LLmodels, HLmodels, Ill, Ihl, pro
 
     end_time = time.time()
     elapsed_time = end_time - start_time
-
-    # Display results
-    if display_results == True: 
-        print_results(T, paramsL, paramsH, elapsed_time)
 
     return opt_params, T
 
@@ -1152,20 +950,6 @@ def empirical_objective(U_L, U_H, T, Theta, Phi, L_models, H_models, Ill, omega)
     loss = loss_iota / len(Ill)
     return loss
 
-def empirical_objective_no_max(U_L, U_H, T, L_models, H_models, Ill, omega):
-
-    loss_iota = 0
-    for iota in Ill:
-        L_i = torch.from_numpy(L_models[iota].F).float()
-        H_i = torch.from_numpy(H_models[omega[iota]].F).float()
-
-        diff = T @ L_i @ U_L.T - H_i @ U_H.T
-
-        loss_iota += torch.norm(diff, p='fro')**2 / (diff.shape[0] * diff.shape[1])
-
-    loss = loss_iota / len(Ill)
-    return loss
-
 def project_onto_frobenius_ball(matrix, radius):
     """
     Projects matrix onto the ball defined by ||matrix||_F^2 <= radius_squared
@@ -1195,19 +979,23 @@ def init_in_frobenius_ball(shape, epsilon):
     
     return nn.Parameter(matrix)  # This ensures requires_grad=True
 
+import torch.nn.init as init
+
 def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilon, delta, eta_min, eta_max,
-                                    num_steps_min, num_steps_max, max_iter, tol, seed, robust_L, robust_H, initialization, experiment,eps,wd):
+                                    num_steps_min, num_steps_max, max_iter, tol, seed, robust_L, robust_H,
+                                    initialization, experiment, gain, optimizers):
     
-    ###
-    # REMOVE EPS AND WD !!!!!!!!
-    # eps = 1e-6
-    # wd  = 1e-4
-    ###
+
     torch.manual_seed(seed)
+    np.random.seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
     Ill = list(L_models.keys())
 
     method  = 'erica' if robust_L or robust_H else 'enrico'        
-    #num_steps_min = 1 if method == 'enrico' else num_steps_min
 
     # Convert inputs to torch tensors
     U_L = torch.as_tensor(U_L, dtype=torch.float32)
@@ -1218,27 +1006,30 @@ def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilo
     _, h = U_H.shape
 
     # Initialize variables
-    T     = torch.randn(h, l, requires_grad=True) 
+    T = torch.randn(h, l, requires_grad=True)
+    if gain > 0:
+        init.xavier_normal_(T, gain=gain)
 
-    if initialization == 'random':
+
+    if initialization == 'zeros':  
+        Theta = torch.zeros(N, l, requires_grad=False)  
+        Phi   = torch.zeros(N, h, requires_grad=False) 
+    elif initialization == 'random':
         Theta = torch.randn(N, l, requires_grad=True)
         Phi   = torch.randn(N, h, requires_grad=True)
+    else:
+        raise ValueError(f"Unknown initialization: {initialization}")
 
-    elif initialization == 'projected':
-        Theta = init_in_frobenius_ball((N, l), epsilon)
-        Phi   = init_in_frobenius_ball((N, h), delta)
+    #optimizer_T = torch.optim.Adam([T], lr=eta_min, eps=1e-8, amsgrad=True)
+    if optimizers == 'adam':
+        optimizer_T = torch.optim.Adam([T], lr=eta_min)
+        optimizer_max = torch.optim.Adam([Theta, Phi], lr=eta_max)
+    elif optimizers == 'adam_betas':
+        optimizer_T  = torch.optim.Adam([T],   lr=eta_min, betas=(0.9,0.999), eps=1e-8, amsgrad=True)
+        optimizer_max = torch.optim.Adam([Theta, Phi], lr=eta_max, betas=(0.9,0.999), eps=1e-8, amsgrad=True)
+    else:
+        raise ValueError(f"Unknown optimizer: {optimizers}")
 
-    
-    # Create optimizers
-    #optimizer_T   = torch.optim.Adam([T], lr=eta_min)
-    #optimizer_T = torch.optim.Adam([T], lr=eta_min, betas=(0.8, 0.95), eps=1e-6)
-    #optimizer_T = torch.optim.Adam([T], lr=6.5e-4, betas=(0.8, 0.95), eps=1e-6)
-    optimizer_T = torch.optim.AdamW([T], lr=eta_min, betas=(0.8, 0.95), eps=eps, weight_decay=wd)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_T, T_max=2000)
-
-
-    optimizer_max = torch.optim.Adam([Theta, Phi], lr=eta_max)
-    
     prev_T_objective = float('inf')
     
     for iteration in tqdm(range(max_iter)):
@@ -1248,11 +1039,11 @@ def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilo
         for _ in range(num_steps_min):
             optimizer_T.zero_grad()
             T_objective = empirical_objective(U_L, U_H, T, Theta, Phi, L_models, H_models, Ill, omega)
+                
             objs_T.append(T_objective.item())
             T_objective.backward()
             optimizer_T.step()
-            scheduler.step()
-        #plot_progress(objs_T, 'T')
+            
         # Step 2: Maximize with respect to Theta and Phi
         if method == 'erica':
             for _ in range(num_steps_max):
@@ -1302,22 +1093,19 @@ def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilo
 def optimize_min(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
                  lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
                  epsilon, delta, num_steps_min, optimizer_T, max_grad_norm, seed,
-                 project_onto_gelbrich, xavier, monitor): 
+                 project_onto_gelbrich, monitor, experiment, gain): 
     torch.manual_seed(seed)
     Ill = list(LLmodels.keys())
-    if xavier:
-        #T = torch.nn.init.xavier_normal_(T, gain=0.1)
-        T0 = torch.eye(T.shape[0], T.shape[1])
-        T = T + 1e-3 * torch.randn_like(T0)
-        #T = torch.nn.init.orthogonal_(T, gain=0.1)
-        # T = torch.nn.init.xavier_normal_(T, gain=0.01) for slc gaussian
+    
+    if gain > 0:
+        init.xavier_normal_(T, gain=gain)
 
     for step in range(num_steps_min):
         objective_iota = torch.tensor(0.0, device=T.device)
         for n, iota in enumerate(Ill):
             L_i = torch.from_numpy(LLmodels[iota].F).float().to(T.device)
             H_i = torch.from_numpy(HLmodels[omega[iota]].F).float().to(T.device)
-
+            #print(project_onto_gelbrich)
             obj_value_iota = compute_objective_value(
                 T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H,
                 lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
@@ -1395,8 +1183,8 @@ def optimize_max_surrogate(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, 
             Sigma_H_optim.add_(jitter_H)
             
             if experiment == 'lilucas':
-                mu_clip_val = 20.0
-                sigma_clip_val = 20.0 
+                mu_clip_val = 30.0 
+                sigma_clip_val = 30.0 
             else: # Default for other experiments
                 mu_clip_val = 50.0
                 sigma_clip_val = 100.0
@@ -1411,10 +1199,10 @@ def optimize_max_surrogate(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, 
 
 def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmodels, omega,
                            lambda_L, lambda_H, lambda_param_L, lambda_param_H,
-                           xavier, project_onto_gelbrich, eta_min, eta_max, max_iter,
+                           project_onto_gelbrich, eta_min, eta_max, max_iter,
                            num_steps_min, num_steps_max, proximal_grad, tol, seed,
                            robust_L, robust_H, grad_clip, plot_steps, plot_epochs,
-                           display_results, experiment):
+                           display_results, experiment, optimizers, gain):
 
     torch.manual_seed(seed)
     start_time = time.time()
@@ -1424,7 +1212,7 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
     epsilon = theta_hatL['radius'] if robust_L else 0
     delta = theta_hatH['radius'] if robust_H else 0
     method = 'erica' if robust_L or robust_H else 'enrico'
-    #num_steps_min = 1 if method == 'enrico' else num_steps_min
+    num_steps_min = 1 if method == 'enrico' else num_steps_min
     max_grad_norm = 1.0 if grad_clip else float('inf')
 
     mu_L, Sigma_L, mu_H, Sigma_H, hat_mu_L, hat_Sigma_L, hat_mu_H, hat_Sigma_H = get_initialization(
@@ -1436,8 +1224,12 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
     hat_mu_H, hat_Sigma_H = hat_mu_H.to(run_device), hat_Sigma_H.to(run_device)
 
     T = torch.randn(mu_H.shape[0], mu_L.shape[0], requires_grad=True, device=run_device)
-    optimizer_T = torch.optim.Adam([T], lr=eta_min)
-    #optimizer_T = torch.optim.Adam([T], lr=eta_min, eps=1e-8, amsgrad=True)
+    
+    if optimizers == 'adam_grad':
+        optimizer_T = torch.optim.Adam([T], lr=eta_min, eps=1e-8, amsgrad=True)
+    else:
+        optimizer_T = torch.optim.Adam([T], lr=eta_min)
+    
     monitor = TrainingMonitor()
     previous_objective = float('inf')
 
@@ -1452,7 +1244,7 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
                 T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
                 lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
                 epsilon, delta, num_steps_min, optimizer_T, max_grad_norm, seed,
-                project_onto_gelbrich, xavier, monitor)
+                project_onto_gelbrich, monitor, experiment, gain)
 
             if hit_nan: raise RuntimeError("Unrecoverable NaN in optimize_min.")
 
@@ -1525,14 +1317,6 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
         print_results(T_final, paramsL, paramsH, elapsed_time)
 
     return {'L': paramsL, 'H': paramsH}, T_final, monitor
-
-
-import torch
-import numpy as np
-import time
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 class TrainingMonitor:
     """

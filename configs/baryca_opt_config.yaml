@@ -1,11 +1,6 @@
-# Hyperparameters for the Barycentric Optimization Method
-
-projection_method: 'svd'
 initialization: 'avg'
-autograd: false
 max_iter: 3000
 tol: 0.0001
-display_results: false
 
 k_folds: 5
 seed: 23 

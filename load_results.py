@@ -18,7 +18,9 @@ def parse_evaluation_filename(filename):
     - empirical_evaluation_additive_gaussian_alpha5-0.0-1.0_noise5-0.0-10.0_trials2_zero_meanTrue_20241201_143022.csv
     """
     # Pattern for both regular and empirical evaluations
-    pattern = r'(empirical_)?evaluation_(\w+)_(\w+)_alpha(\d+)-([\d.]+)-([\d.]+)_noise(\d+)-([\d.]+)-([\d.]+)_trials(\d+)_zero_mean(\w+)_(\d{8})_(\d{6})\.csv'
+    # pattern = r'(empirical_)?evaluation_(\w+)_(\w+)_alpha(\d+)-([\d.]+)-([\d.]+)_noise(\d+)-([\d.]+)-([\d.]+)_trials(\d+)_zero_mean(\w+)_(\d{8})_(\d{6})\.csv'
+    # AFTER
+    pattern = r'(empirical_)?evaluation_(\w+)_([\w-]+)_alpha(\d+)-([\d.]+)-([\d.]+)_noise(\d+)-([\d.]+)-([\d.]+)_trials(\d+)_zero_mean(\w+)_(\d{8})_(\d{6})\.csv'
     match = re.match(pattern, filename)
     
     if match:

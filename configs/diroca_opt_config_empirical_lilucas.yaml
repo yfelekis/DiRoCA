@@ -1,0 +1,18 @@
+eta_max: 0.001
+eta_min: 0.001
+
+max_iter: 5000
+num_steps_min: 5
+num_steps_max: 2
+tol: 0.0001
+
+k_folds: 5
+
+seed: 23
+gain: 0.0
+optimizers: 'adam'
+robust_L: true 
+robust_H: true
+
+initialization: 'random'
+

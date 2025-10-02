@@ -1,0 +1,22 @@
+# Epsilon and Delta are required, so we set them to 0 for the non-robust case
+epsilon: 0.0
+delta: 0.0
+
+# Optimization parameters
+eta_max: 0.001
+eta_min: 0.0001
+max_iter: 5000
+num_steps_min: 1
+num_steps_max: 1
+tol: 0.0000001
+
+k_folds: 5
+
+seed: 23 
+gain: 0.1
+optimizers: 'adam'
+initialization: 'zeros'
+
+# Method flags 
+robust_L: false 
+robust_H: false

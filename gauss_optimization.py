@@ -29,16 +29,55 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# def setup_experiment(experiment_name):
+#     """Setup the experiment configuration and data."""
+#     logger.info(f"Setting up experiment: {experiment_name}")
+    
+#     # Load configuration files
+#     config_files = {
+#         'hyperparams_diroca': 'configs/diroca_opt_config.yaml',
+#         'hyperparams_gradca': 'configs/gradca_opt_config.yaml',
+#         'hyperparams_baryca': 'configs/baryca_opt_config.yaml'
+#     }
+#     configs = ut.load_configs(config_files)
+    
+#     # Load data
+#     all_data = ut.load_all_data(experiment_name)
+#     all_data['experiment_name'] = experiment_name
+    
+#     # Prepare cross-validation folds
+#     Dll_obs = all_data['LLmodel']['data'][None]
+#     Dhl_obs = all_data['HLmodel']['data'][None]
+#     folds_path = f"data/{experiment_name}/cv_folds.pkl"
+#     saved_folds = ut.prepare_cv_folds(Dll_obs, configs['hyperparams_diroca']['k_folds'], 
+#                                     configs['hyperparams_diroca']['seed'], folds_path)
+    
+#     return configs, all_data, saved_folds
+
 def setup_experiment(experiment_name):
     """Setup the experiment configuration and data."""
     logger.info(f"Setting up experiment: {experiment_name}")
     
-    # Load configuration files
+    def get_config_path(base_name, exp_name):
+        """Checks for a specialized config and falls back to default."""
+        specialized_path = f"configs/{base_name}_{exp_name}.yaml"
+        default_path = f"configs/{base_name}.yaml"
+        
+        if os.path.exists(specialized_path):
+            logger.info(f"Loading specialized config: {specialized_path}")
+            return specialized_path
+        else:
+            logger.info(f"Specialized config not found. Loading default: {default_path}")
+            return default_path
+
+    # Load configuration files dynamically
     config_files = {
-        'hyperparams_diroca': 'configs/diroca_opt_config.yaml',
-        'hyperparams_gradca': 'configs/gradca_opt_config.yaml',
-        'hyperparams_baryca': 'configs/baryca_opt_config.yaml'
+        'hyperparams_diroca': get_config_path('diroca_opt_config', experiment_name),
+        'hyperparams_gradca': get_config_path('gradca_opt_config', experiment_name),
+        'hyperparams_baryca': get_config_path('baryca_opt_config', experiment_name)
     }
+    
+
     configs = ut.load_configs(config_files)
     
     # Load data

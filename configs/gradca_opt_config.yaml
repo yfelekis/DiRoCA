@@ -20,7 +20,6 @@ plot_epochs: false
 display_results: false
 
 # Method flags
-xavier: false #SLC(G) = True, LUC(G) = False
 project_onto_gelbrich: true
 proximal_grad: true
 grad_clip: true

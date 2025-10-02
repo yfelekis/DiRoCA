@@ -5,16 +5,18 @@ lambda_param_L: 0.2
 lambda_param_H: 0.1
 
 # Optimization parameters
-eta_max: 0.001
+eta_max: 0.001 
 eta_min: 0.001
-max_iter: 2000
-num_steps_min: 5
-num_steps_max: 2
-tol: 0.0001
+max_iter: 5000 
+num_steps_min: 1
+num_steps_max: 1
+tol: 0.0001 
 
 k_folds: 5
 
 seed: 23 
+gain: 0.0
+optimizers: 'adam_grad'
 plot_steps: false
 plot_epochs: false
 display_results: false
@@ -23,5 +25,6 @@ display_results: false
 project_onto_gelbrich: true
 proximal_grad: true
 grad_clip: true
-robust_L: true
-robust_H: true
+robust_L: false
+robust_H: false
+

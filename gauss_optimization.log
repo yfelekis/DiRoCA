@@ -1,0 +1,134 @@
+2025-09-30 15:22:00,940 - INFO - Output directory: data/slc/results
+2025-09-30 15:22:00,940 - INFO - Setting up experiment: slc
+2025-09-30 15:22:00,940 - INFO - Loading specialized config: configs/diroca_opt_config_slc.yaml
+2025-09-30 15:22:00,940 - INFO - Loading specialized config: configs/gradca_opt_config_slc.yaml
+2025-09-30 15:22:00,940 - INFO - Specialized config not found. Loading default: configs/baryca_opt_config.yaml
+2025-09-30 15:22:00,961 - INFO - Starting DiRoCA optimization...
+2025-09-30 15:22:00,962 - INFO - Starting Cross-Validation for Fold 1/5
+2025-09-30 15:22:00,962 - INFO - Training for ε=δ = 4
+2025-09-30 15:22:07,877 - INFO - Training for ε=δ = 8
+2025-09-30 15:22:14,056 - INFO - Training for ε=δ = 1
+2025-09-30 15:22:25,852 - INFO - Training for ε=δ = 2
+2025-09-30 15:23:22,462 - INFO - Training for ε=δ = 0.111
+2025-09-30 15:23:51,015 - INFO - Starting Cross-Validation for Fold 2/5
+2025-09-30 15:23:51,016 - INFO - Training for ε=δ = 4
+2025-09-30 15:23:57,235 - INFO - Training for ε=δ = 8
+2025-09-30 15:24:03,447 - INFO - Training for ε=δ = 1
+2025-09-30 15:24:15,230 - INFO - Training for ε=δ = 2
+2025-09-30 15:25:11,422 - INFO - Training for ε=δ = 0.111
+2025-09-30 15:25:39,216 - INFO - Starting Cross-Validation for Fold 3/5
+2025-09-30 15:25:39,216 - INFO - Training for ε=δ = 4
+2025-09-30 15:25:45,446 - INFO - Training for ε=δ = 8
+2025-09-30 15:25:51,641 - INFO - Training for ε=δ = 1
+2025-09-30 15:26:03,347 - INFO - Training for ε=δ = 2
+2025-09-30 15:27:00,257 - INFO - Training for ε=δ = 0.111
+2025-09-30 15:27:27,788 - INFO - Starting Cross-Validation for Fold 4/5
+2025-09-30 15:27:27,790 - INFO - Training for ε=δ = 4
+2025-09-30 15:27:34,015 - INFO - Training for ε=δ = 8
+2025-09-30 15:27:40,248 - INFO - Training for ε=δ = 1
+2025-09-30 15:27:51,998 - INFO - Training for ε=δ = 2
+2025-09-30 15:28:48,231 - INFO - Training for ε=δ = 0.111
+2025-09-30 15:29:15,952 - INFO - Starting Cross-Validation for Fold 5/5
+2025-09-30 15:29:15,952 - INFO - Training for ε=δ = 4
+2025-09-30 15:29:22,173 - INFO - Training for ε=δ = 8
+2025-09-30 15:29:28,408 - INFO - Training for ε=δ = 1
+2025-09-30 15:29:40,125 - INFO - Training for ε=δ = 2
+2025-09-30 15:30:36,690 - INFO - Training for ε=δ = 0.111
+2025-09-30 15:31:05,717 - INFO - DiRoCA results saved to data/slc/results/diroca_cv_results.pkl
+2025-09-30 15:31:05,717 - INFO - Starting GRADCA optimization...
+2025-09-30 15:31:05,717 - INFO - Starting Cross-Validation for Fold 1/5
+2025-09-30 15:31:06,264 - INFO - Starting Cross-Validation for Fold 2/5
+2025-09-30 15:31:06,809 - INFO - Starting Cross-Validation for Fold 3/5
+2025-09-30 15:31:07,356 - INFO - Starting Cross-Validation for Fold 4/5
+2025-09-30 15:31:07,905 - INFO - Starting Cross-Validation for Fold 5/5
+2025-09-30 15:31:08,459 - INFO - GRADCA results saved to data/slc/results/gradca_cv_results.pkl
+2025-09-30 15:31:08,459 - INFO - Starting BARYCA optimization...
+2025-09-30 15:31:08,459 - INFO - Starting Barycentric Optimization for Fold 1/5
+2025-09-30 15:31:08,470 - INFO - Starting Barycentric Optimization for Fold 2/5
+2025-09-30 15:31:08,476 - INFO - Starting Barycentric Optimization for Fold 3/5
+2025-09-30 15:31:08,482 - INFO - Starting Barycentric Optimization for Fold 4/5
+2025-09-30 15:31:08,488 - INFO - Starting Barycentric Optimization for Fold 5/5
+2025-09-30 15:31:08,495 - INFO - BARYCA results saved to data/slc/results/baryca_cv_results.pkl
+2025-09-30 15:31:08,495 - INFO - All optimizations completed successfully!
+2025-09-30 15:31:08,495 - INFO - Results saved to: data/slc/results
+2025-09-30 16:39:44,077 - INFO - Output directory: data/lilucas/results
+2025-09-30 16:39:44,077 - INFO - Setting up experiment: lilucas
+2025-09-30 16:39:44,077 - INFO - Loading specialized config: configs/diroca_opt_config_lilucas.yaml
+2025-09-30 16:39:44,077 - INFO - Loading specialized config: configs/gradca_opt_config_lilucas.yaml
+2025-09-30 16:39:44,078 - INFO - Specialized config not found. Loading default: configs/baryca_opt_config.yaml
+2025-09-30 16:39:44,229 - INFO - Starting DiRoCA optimization...
+2025-09-30 16:39:44,229 - INFO - Starting Cross-Validation for Fold 1/5
+2025-09-30 16:39:44,229 - INFO - Training for ε=δ = 4
+2025-09-30 16:40:54,983 - INFO - Training for ε=δ = 8
+2025-09-30 16:42:04,996 - INFO - Training for ε=δ = 1
+2025-09-30 16:49:32,406 - INFO - Training for ε=δ = 2
+2025-09-30 16:52:24,433 - INFO - Training for ε=δ = 0.111
+2025-09-30 16:56:45,236 - INFO - Starting Cross-Validation for Fold 2/5
+2025-09-30 16:56:45,238 - INFO - Training for ε=δ = 4
+2025-09-30 16:57:55,818 - INFO - Training for ε=δ = 8
+2025-09-30 16:59:06,625 - INFO - Training for ε=δ = 1
+2025-09-30 17:06:35,693 - INFO - Training for ε=δ = 2
+2025-09-30 17:09:29,110 - INFO - Training for ε=δ = 0.111
+2025-09-30 17:13:49,147 - INFO - Starting Cross-Validation for Fold 3/5
+2025-09-30 17:13:49,148 - INFO - Training for ε=δ = 4
+2025-09-30 17:14:59,706 - INFO - Training for ε=δ = 8
+2025-09-30 17:16:13,161 - INFO - Training for ε=δ = 1
+2025-09-30 17:23:58,134 - INFO - Training for ε=δ = 2
+2025-09-30 17:26:49,675 - INFO - Training for ε=δ = 0.111
+2025-09-30 17:31:11,406 - INFO - Starting Cross-Validation for Fold 4/5
+2025-09-30 17:31:11,407 - INFO - Training for ε=δ = 4
+2025-09-30 17:32:21,057 - INFO - Training for ε=δ = 8
+2025-09-30 17:33:30,556 - INFO - Training for ε=δ = 1
+2025-09-30 17:40:55,771 - INFO - Training for ε=δ = 2
+2025-09-30 17:43:48,115 - INFO - Training for ε=δ = 0.111
+2025-09-30 17:48:07,272 - INFO - Starting Cross-Validation for Fold 5/5
+2025-09-30 17:48:07,273 - INFO - Training for ε=δ = 4
+2025-09-30 17:49:17,734 - INFO - Training for ε=δ = 8
+2025-09-30 17:50:31,860 - INFO - Training for ε=δ = 1
+2025-09-30 17:58:11,531 - INFO - Training for ε=δ = 2
+2025-09-30 18:01:06,549 - INFO - Training for ε=δ = 0.111
+2025-09-30 18:05:37,369 - INFO - DiRoCA results saved to data/lilucas/results/diroca_cv_results.pkl
+2025-09-30 18:05:37,370 - INFO - Starting GRADCA optimization...
+2025-09-30 18:05:37,370 - INFO - Starting Cross-Validation for Fold 1/5
+2025-09-30 18:07:48,274 - INFO - Starting Cross-Validation for Fold 2/5
+2025-09-30 18:09:57,299 - INFO - Starting Cross-Validation for Fold 3/5
+2025-09-30 18:12:04,597 - INFO - Starting Cross-Validation for Fold 4/5
+2025-09-30 18:14:11,884 - INFO - Starting Cross-Validation for Fold 5/5
+2025-09-30 18:16:20,332 - INFO - GRADCA results saved to data/lilucas/results/gradca_cv_results.pkl
+2025-09-30 18:16:20,340 - INFO - Starting BARYCA optimization...
+2025-09-30 18:16:20,341 - INFO - Starting Barycentric Optimization for Fold 1/5
+2025-09-30 18:16:20,402 - INFO - Starting Barycentric Optimization for Fold 2/5
+2025-09-30 18:16:20,456 - INFO - Starting Barycentric Optimization for Fold 3/5
+2025-09-30 18:16:20,576 - INFO - Starting Barycentric Optimization for Fold 4/5
+2025-09-30 18:16:20,669 - INFO - Starting Barycentric Optimization for Fold 5/5
+2025-09-30 18:16:20,747 - INFO - BARYCA results saved to data/lilucas/results/baryca_cv_results.pkl
+2025-09-30 18:16:20,747 - INFO - All optimizations completed successfully!
+2025-09-30 18:16:20,747 - INFO - Results saved to: data/lilucas/results
+2025-10-01 08:59:19,524 - INFO - Output directory: data/slc/results
+2025-10-01 08:59:19,524 - INFO - Setting up experiment: slc
+2025-10-01 08:59:19,524 - INFO - Loading specialized config: configs/diroca_opt_config_slc.yaml
+2025-10-01 08:59:19,524 - INFO - Loading specialized config: configs/gradca_opt_config_slc.yaml
+2025-10-01 08:59:19,524 - INFO - Specialized config not found. Loading default: configs/baryca_opt_config.yaml
+2025-10-01 08:59:19,552 - INFO - Starting BARYCA optimization...
+2025-10-01 08:59:19,552 - INFO - Starting Barycentric Optimization for Fold 1/5
+2025-10-01 08:59:19,813 - INFO - Starting Barycentric Optimization for Fold 2/5
+2025-10-01 08:59:19,819 - INFO - Starting Barycentric Optimization for Fold 3/5
+2025-10-01 08:59:19,825 - INFO - Starting Barycentric Optimization for Fold 4/5
+2025-10-01 08:59:19,832 - INFO - Starting Barycentric Optimization for Fold 5/5
+2025-10-01 08:59:19,839 - INFO - BARYCA results saved to data/slc/results/baryca_cv_results.pkl
+2025-10-01 08:59:19,839 - INFO - All optimizations completed successfully!
+2025-10-01 08:59:19,839 - INFO - Results saved to: data/slc/results
+2025-10-01 08:59:32,109 - INFO - Output directory: data/lilucas/results
+2025-10-01 08:59:32,109 - INFO - Setting up experiment: lilucas
+2025-10-01 08:59:32,109 - INFO - Loading specialized config: configs/diroca_opt_config_lilucas.yaml
+2025-10-01 08:59:32,109 - INFO - Loading specialized config: configs/gradca_opt_config_lilucas.yaml
+2025-10-01 08:59:32,110 - INFO - Specialized config not found. Loading default: configs/baryca_opt_config.yaml
+2025-10-01 08:59:32,155 - INFO - Starting BARYCA optimization...
+2025-10-01 08:59:32,155 - INFO - Starting Barycentric Optimization for Fold 1/5
+2025-10-01 08:59:32,215 - INFO - Starting Barycentric Optimization for Fold 2/5
+2025-10-01 08:59:32,269 - INFO - Starting Barycentric Optimization for Fold 3/5
+2025-10-01 08:59:32,322 - INFO - Starting Barycentric Optimization for Fold 4/5
+2025-10-01 08:59:32,377 - INFO - Starting Barycentric Optimization for Fold 5/5
+2025-10-01 08:59:32,433 - INFO - BARYCA results saved to data/lilucas/results/baryca_cv_results.pkl
+2025-10-01 08:59:32,433 - INFO - All optimizations completed successfully!
+2025-10-01 08:59:32,433 - INFO - Results saved to: data/lilucas/results
