@@ -29,31 +29,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# def setup_experiment(experiment_name):
-#     """Setup the experiment configuration and data."""
-#     logger.info(f"Setting up experiment: {experiment_name}")
-    
-#     # Load configuration files
-#     config_files = {
-#         'hyperparams_diroca': 'configs/diroca_opt_config.yaml',
-#         'hyperparams_gradca': 'configs/gradca_opt_config.yaml',
-#         'hyperparams_baryca': 'configs/baryca_opt_config.yaml'
-#     }
-#     configs = ut.load_configs(config_files)
-    
-#     # Load data
-#     all_data = ut.load_all_data(experiment_name)
-#     all_data['experiment_name'] = experiment_name
-    
-#     # Prepare cross-validation folds
-#     Dll_obs = all_data['LLmodel']['data'][None]
-#     Dhl_obs = all_data['HLmodel']['data'][None]
-#     folds_path = f"data/{experiment_name}/cv_folds.pkl"
-#     saved_folds = ut.prepare_cv_folds(Dll_obs, configs['hyperparams_diroca']['k_folds'], 
-#                                     configs['hyperparams_diroca']['seed'], folds_path)
-    
-#     return configs, all_data, saved_folds
-
 def setup_experiment(experiment_name):
     """Setup the experiment configuration and data."""
     logger.info(f"Setting up experiment: {experiment_name}")

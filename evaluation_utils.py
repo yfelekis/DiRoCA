@@ -330,11 +330,6 @@ def plot_empirical_abstraction_error(results, methods, sample_form, figsize=(12,
                 markersize=12,
                 linewidth=2)
         
-        # plt.fill_between(radius_values,
-        #                 np.array(errors) - np.array(error_stds),
-        #                 np.array(errors) + np.array(error_stds),
-        #                 color=style['color'],
-        #                 alpha=0.2)
     
     # Customize plot
     plt.xlabel(r'Perturbation Radius ($\varepsilon_{\ell}=\varepsilon_{h}$)', fontsize=30)
@@ -488,42 +483,6 @@ def generate_perturbation_matrix(radius, sample_form, level, hat_dict, coverage,
         raise ValueError(f"Unknown sample form: {sample_form}. Use 'sample' or 'boundary'")
 
     return perturbation * scaling_factor
-
-# def generate_perturbation_family2(center_matrix, k, r_mu=1.0, r_sigma=1.0, seed=None):
-#     """
-#     Generate k perturbation matrices from a base matrix using random shifts.
-    
-#     Args:
-#         center_matrix: Base matrix to perturb (n, m)
-#         k: Number of perturbations to generate
-#         r_mu: Max norm of mean shifts
-#         r_sigma: Max Frobenius norm of covariance shifts
-#         seed: Optional random seed
-        
-#     Returns:
-#         List of perturbation matrices
-#     """
-#     if seed is not None:
-#         np.random.seed(seed)
-        
-#     n, m = center_matrix.shape
-#     perturbations = []
-    
-#     for _ in range(k):
-#         # Generate random perturbation matrix
-#         A = np.random.randn(n, m)
-#         # Scale to have Frobenius norm = r_sigma
-#         A = r_sigma * A / np.linalg.norm(A, ord='fro')
-        
-#         # Add mean shift
-#         delta_mu = np.random.randn(n, m)
-#         delta_mu = r_mu * delta_mu / np.linalg.norm(delta_mu)
-        
-#         # Combine perturbations
-#         perturbation = A + delta_mu
-#         perturbations.append(perturbation)
-        
-#     return perturbations
 
 def compute_abstraction_error(T, base, abst, metric):
     tau_base   = base @ T.T

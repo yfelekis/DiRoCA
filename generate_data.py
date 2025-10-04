@@ -24,7 +24,6 @@ def generate_and_save(config):
     # --- 2. Low-Level Model Setup & Sampling (MODEL-TYPE-SPECIFIC LOGIC) ---
     print(f"--- Generating data for {model_type} model: {experiment} ---")
     
-    # These will be populated by the specific model branch
     Dll_samples, Dll_noise = {}, {}
     ll_causal_graph = None
 
@@ -57,8 +56,6 @@ def generate_and_save(config):
         # For non-linear models, the graph structure must be defined explicitly
         ll_causal_graph = CausalBayesianNetwork(ll_config['graph_edges'])
 
-        # WARNING: eval() is powerful but can be a security risk if the config 
-        # is not from a trusted source. It is safe for your use case here.
         safe_eval_scope = {'np': np} 
         functions = {var: eval(func_str, safe_eval_scope) for var, func_str in ll_config['structural_functions'].items()}
 

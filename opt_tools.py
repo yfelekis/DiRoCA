@@ -1020,7 +1020,6 @@ def run_empirical_erica_optimization(U_L, U_H, L_models, H_models, omega, epsilo
     else:
         raise ValueError(f"Unknown initialization: {initialization}")
 
-    #optimizer_T = torch.optim.Adam([T], lr=eta_min, eps=1e-8, amsgrad=True)
     if optimizers == 'adam':
         optimizer_T = torch.optim.Adam([T], lr=eta_min)
         optimizer_max = torch.optim.Adam([Theta, Phi], lr=eta_max)
@@ -1105,7 +1104,7 @@ def optimize_min(T, mu_L, Sigma_L, mu_H, Sigma_H, LLmodels, HLmodels, omega,
         for n, iota in enumerate(Ill):
             L_i = torch.from_numpy(LLmodels[iota].F).float().to(T.device)
             H_i = torch.from_numpy(HLmodels[omega[iota]].F).float().to(T.device)
-            #print(project_onto_gelbrich)
+            
             obj_value_iota = compute_objective_value(
                 T, L_i, H_i, mu_L, mu_H, Sigma_L, Sigma_H,
                 lambda_L, lambda_H, hat_mu_L, hat_mu_H, hat_Sigma_L, hat_Sigma_H,
@@ -1279,10 +1278,6 @@ def run_erica_optimization(theta_hatL, theta_hatH, initial_theta, LLmodels, HLmo
         monitor.track_epoch_metrics(
             delta_obj=delta_objective, cond_num=condition_num, delta_T=delta_T_norm,
             mu_L=mu_L, sigma_L=Sigma_L, mu_H=mu_H, sigma_H=Sigma_H)
-        
-        # if delta_objective < tol:
-        #     print(f"Convergence reached at epoch {epoch+1}")
-        #     break
 
         if (epoch + 1) >= 50 and delta_objective < tol:
             print(f"Convergence reached at epoch {epoch+1}")
