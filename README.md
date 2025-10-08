@@ -1,6 +1,6 @@
 # Distributionally Robust Causal Abstractions
 
-This repository contains the implementation and evaluation framework for Distributionally Robust Causal Abstractions (DiRoCA) paper.
+This repository contains the implementation and evaluation framework for [Distributionally Robust Causal Abstractions](https://arxiv.org/pdf/2510.04842) (DiRoCA) paper.
 
 ## Quick Start
 
